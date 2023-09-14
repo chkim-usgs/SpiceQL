@@ -20,7 +20,7 @@ clone_github:
         - rm -rf spiceql  # Needed to allow multiple CI runs
         - git config --global user.name "krodriguez"
         - git config --global user.email "krodriguez@usgs.gov"
-        - git clone --mirror $SOURCE_REPOSITORY spiceql
+        - git clone --mirror https://github.com/DOI-USGS/SpiceQL.git spiceql
         - cd spiceql
         - git remote remove origin
         - git remote add origin $DESTINATION_REPOSITORY
