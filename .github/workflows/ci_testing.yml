@@ -8,17 +8,17 @@ env:
 
 jobs:
   build-library:
-
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.9", "3.10", "3.11"]
     defaults:
       run:
         shell: bash -l {0}
     env:
       SSPICE_DEBUG: y
+      SPICEQL_LOG_LEVEL: DEBUG
     steps:
       - uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9
         with:
@@ -28,7 +28,7 @@ jobs:
           miniforge-version: latest
           use-mamba: true
           channels: conda-forge
-          activate-environment: ale
+          activate-environment: spiceql
           environment-file: environment.yml
           auto-activate-base: false
           auto-update-conda: true
@@ -37,19 +37,18 @@ jobs:
         run: |
           conda list
       - name: Configure CMake
-        working-directory: ${{github.workspace}}/build
-        run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DSPICEQL_BUILD_DOCS=OFF -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/install
-      - name: Build
-        working-directory: ${{github.workspace}}/build
-        # Execute the build.  You can specify a specific target with "--target <NAME>"
         run: |
-          cmake --build . --config $BUILD_TYPE
-  
+          mkdir -p build
+          cd build
+          cmake -DCMAKE_BUILD_TYPE=RELEASE -DSPICEQL_BUILD_DOCS=OFF -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX ..
+          cmake --build .
+      
       - name: Test
         working-directory: ${{github.workspace}}/build
         # Execute tests defined by the CMake configuration.
         # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-        run: ctest -VV -C $BUILD_TYPE
+        run: | 
+          ctest -VV  
   
       - name: Install
         working-directory: ${{github.workspace}}/build
@@ -58,84 +57,84 @@ jobs:
           cmake --install . --config $BUILD_TYPE
   
       - name: Check install
-        working-directory: ${{github.workspace}}/install
+        working-directory: ${{github.workspace}}
         # Check that the library installed properly
         run: |
             if [ "$RUNNER_OS" == "macOS" ]; then
-              test -e lib/libSpiceQL.dylib
+              test -e $CONDA_PREFIX/lib/libSpiceQL.dylib
             elif [ "$RUNNER_OS" == "Linux" ]; then
-              test -e lib/libSpiceQL.so
+              test -e $CONDA_PREFIX/lib/libSpiceQL.so
             fi
-            test -e include/SpiceQL/spiceql.h
-            rm -rf ${{github.workspace}}/build
-            python -c "import pyspiceql"
+            test -e $CONDA_PREFIX/include/SpiceQL/spiceql.h
+            $CONDA_PREFIX/bin/python -c "import pyspiceql"
   
       # compair all json files against the schema 
       - name: check json files
-        working-directory: ${{github.workspace}}/SpiceQL/db/schema
+        working-directory: ${{github.workspace}}/SpiceQL/db/
         run: |
           for file in *.json;
               do
               pwd
-              jsonschema --instance "$file" spiceMissionSchmea.schema.json 
+              check-jsonschema $file --schemafile schema/spiceMissionSchmea.schema.json 
           done;
   
-    build-docs:
-      runs-on: ubuntu-latest
-      defaults:
-        run:
-          shell: bash -l {0}
-      steps:
-        - uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9
-        - uses: conda-incubator/setup-miniconda@3b0f2504dd76ef23b6d31f291f4913fb60ab5ff3
-          with:
-              miniconda-version: "latest"
-              activate-environment: spiceql
-              environment-file: environment.yml
-              auto-activate-base: false
-              auto-update-conda: true
+  build-docs:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -l {0}
+    steps:
+      - uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9
+      - uses: conda-incubator/setup-miniconda@3b0f2504dd76ef23b6d31f291f4913fb60ab5ff3
+        with:
+            miniconda-version: "latest"
+            activate-environment: spiceql
+            channels: conda-forge
+            environment-file: environment.yml
+            auto-activate-base: false
+            auto-update-conda: true
   
-        - name: Conda info
-          run: |
-              conda info
-              conda list
+      - name: Conda info
+        run: |
+            conda info
+            conda list
   
-        - name: Create Build Environment
-          # Some projects don't allow in-source building, so create separate build and install
-          # directorie; we'll use them as our working directories for subsequent commands.
-          run: |
-              cmake -E make_directory ${{github.workspace}}/build
-              cmake -E make_directory ${{github.workspace}}/install
+      - name: Create Build Environment
+        # Some projects don't allow in-source building, so create separate build and install
+        # directorie; we'll use them as our working directories for subsequent commands.
+        run: |
+            cmake -E make_directory ${{github.workspace}}/build
+            cmake -E make_directory ${{github.workspace}}/install
   
-        - name: Configure CMake
-          working-directory: ${{github.workspace}}/build
-          run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DSPICEQL_BUILD_LIB=OFF -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/install
+      - name: Configure CMake
+        working-directory: ${{github.workspace}}/build
+        run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DSPICEQL_BUILD_LIB=OFF -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/install
   
-        - name: Build
-          working-directory: ${{github.workspace}}/build
-          # Execute the build.
-          run: |
-            cmake --build . --config $BUILD_TYPE
+      - name: Build
+        working-directory: ${{github.workspace}}/build
+        # Execute the build.
+        run: |
+          cmake --build . --config $BUILD_TYPE
   
-        - name: Check Build Docs
-          working-directory: ${{github.workspace}}/build/docs/sphinx
-          # Check for the built docs
-          run: |
-              test -e index.html
-              test -e reference/api.html
-              test -e reference/tutorials.html
+      - name: Check Build Docs
+        working-directory: ${{github.workspace}}/build/docs/sphinx
+        # Check for the built docs
+        run: |
+            test -e index.html
+            test -e reference/api.html
+            test -e reference/tutorials.html
   
-        - name: Install Docs
-          working-directory: ${{github.workspace}}/build
-          # Install the build.
-          run: |
-            cmake --install . --config $BUILD_TYPE
+      - name: Install Docs
+        working-directory: ${{github.workspace}}/build
+        # Install the build.
+        run: |
+          cmake --install . --config $BUILD_TYPE
   
-        - name: Check Install Docs
-          working-directory: ${{github.workspace}}/install
-          # Check for the built docs
-          run: |
-              test -e share/doc/SpiceQL/sphinx/index.html
-              test -e share/doc/SpiceQL/sphinx/reference/api.html
-              test -e share/doc/SpiceQL/sphinx/reference/tutorials.html
+      - name: Check Install Docs
+        working-directory: ${{github.workspace}}/install
+        # Check for the built docs
+        run: |
+            test -e share/doc/SpiceQL/sphinx/index.html
+            test -e share/doc/SpiceQL/sphinx/reference/api.html
+            test -e share/doc/SpiceQL/sphinx/reference/tutorials.html
   
