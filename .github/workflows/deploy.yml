@@ -92,7 +92,7 @@ jobs:
         working-directory: ${{github.workspace}}/build
         # Install the build.
         run: |
-          cmake --install . --config $BUILD_TYPE
+          cmake --install .
      
       - name: Upload to S3
         working-directory: ${{github.workspace}}/install
