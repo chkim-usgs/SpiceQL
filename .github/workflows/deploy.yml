@@ -78,7 +78,7 @@ jobs:
         working-directory: ${{github.workspace}}/build
         # Execute the build.
         run: |
-          cmake --build . --config $BUILD_TYPE
+          cmake --build .
   
       - name: Check Build Docs
         working-directory: ${{github.workspace}}/build/docs/sphinx
