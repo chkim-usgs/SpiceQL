@@ -1,7 +1,7 @@
 """Module providing SpiceQL endpoints"""
 
 from ast import literal_eval
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any
 from fastapi import FastAPI, Query
 from pydantic import BaseModel, Field
 import pyspiceql
@@ -11,19 +11,15 @@ import pyspiceql
 class MessageItem(BaseModel):
     message: str
 
-class BodyModel(BaseModel):
-    result: Optional[Any] = None
-    error: Optional[str] = None
-
-class ResultModel(BodyModel):
+class ResultModel(BaseModel):
     result: Any = Field(serialization_alias='return')
 
-class ErrorModel(BodyModel):
+class ErrorModel(BaseModel):
     error: str
 
 class ResponseModel(BaseModel):
     statusCode: int
-    body: dict | str
+    body: ResultModel | ErrorModel
 
 # Create FastAPI instance
 app = FastAPI()
@@ -56,10 +52,10 @@ async def getTargetStates(
         if isinstance(ets, str):
             ets = literal_eval(ets)
         result = pyspiceql.getTargetStates(ets, target, observer, frame, abcorr, mission, ckQuality, spkQuality, searchKernels)
-        body = ResultModel(result=result).model_dump(by_alias=True, exclude_none=True)
+        body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
-        body = ErrorModel(error=str(e)).model_dump(exclude_none=True)
+        body = ErrorModel(error=str(e))
         return ResponseModel(statusCode=500, body=body)
     
 @app.get("/getTargetOrientations")
@@ -74,10 +70,10 @@ async def getTargetOrientations(
         if isinstance(ets, str):
             ets = literal_eval(ets)
         result = pyspiceql.getTargetOrientations(ets, toFrame, refFrame, mission, ckQuality, searchKernels)
-        body = ResultModel(result=result).model_dump(by_alias=True, exclude_none=True)  
+        body = ResultModel(result=result)  
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
-        body = ErrorModel(error=str(e)).model_dump(exclude_none=True)
+        body = ErrorModel(error=str(e))
         return ResponseModel(statusCode=500, body=body)
 
 @app.get("/strSclkToEt")
@@ -88,10 +84,10 @@ async def strSclkToEt(
     searchKernels: bool = False):
     try:
         result = pyspiceql.strSclkToEt(frameCode, sclk, mission, searchKernels)
-        body = ResultModel(result=result).model_dump(by_alias=True, exclude_none=True)
+        body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
-        body = ErrorModel(error=str(e)).model_dump(exclude_none=True)
+        body = ErrorModel(error=str(e))
         return ResponseModel(statusCode=500, body=body)
 
 @app.get("/doubleSclkToEt")
@@ -102,10 +98,10 @@ async def doubleSclkToEt(
     searchKernels: bool = False):
     try:
         result = pyspiceql.doubleSclkToEt(frameCode, sclk, mission, searchKernels)
-        body = ResultModel(result=result).model_dump(by_alias=True, exclude_none=True)
+        body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
-        body = ErrorModel(error=str(e)).model_dump(exclude_none=True)
+        body = ErrorModel(error=str(e))
         return ResponseModel(statusCode=500, body=body)
 
 @app.get("/utcToEt")
@@ -114,10 +110,10 @@ async def utcToEt(
     searchKernels: bool = False):
     try:
         result = pyspiceql.utcToEt(utc, searchKernels)
-        body = ResultModel(result=result).model_dump(by_alias=True, exclude_none=True)
+        body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
-        body = ErrorModel(error=str(e)).model_dump(exclude_none=True)
+        body = ErrorModel(error=str(e))
         return ResponseModel(statusCode=500, body=body)
 
 @app.get("/translateNameToCode")
@@ -127,10 +123,10 @@ async def translateNameToCode(
     searchKernels: bool = False):
     try:
         result = pyspiceql.translateNameToCode(frame, mission, searchKernels)
-        body = ResultModel(result=result).model_dump(by_alias=True, exclude_none=True)
+        body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
-        body = ErrorModel(error=str(e)).model_dump(exclude_none=True)
+        body = ErrorModel(error=str(e))
         return ResponseModel(statusCode=500, body=body)
 
 @app.get("/translateCodeToName")
@@ -140,10 +136,10 @@ async def translateCodeToName(
     searchKernels: bool = False):
     try:
         result = pyspiceql.translateCodeToName(frame, mission, searchKernels)
-        body = ResultModel(result=result).model_dump(by_alias=True, exclude_none=True)
+        body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
-        body = ErrorModel(error=str(e)).model_dump(exclude_none=True)
+        body = ErrorModel(error=str(e))
         return ResponseModel(statusCode=500, body=body)
 
 @app.get("/getFrameInfo")
@@ -153,10 +149,10 @@ async def getFrameInfo(
     searchKernels: bool = False):
     try:
         result = pyspiceql.getFrameInfo(frame, mission, searchKernels)
-        body = ResultModel(result=result).model_dump(by_alias=True, exclude_none=True)
+        body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
-        body = ErrorModel(error=str(e)).model_dump(exclude_none=True)
+        body = ErrorModel(error=str(e))
         return ResponseModel(statusCode=500, body=body)
 
 @app.get("/getTargetFrameInfo")
@@ -166,10 +162,10 @@ async def getTargetFrameInfo(
     searchKernels: bool = False):
     try:
         result = pyspiceql.getTargetFrameInfo(targetId, mission, searchKernels)
-        body = ResultModel(result=result).model_dump(by_alias=True, exclude_none=True)
+        body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
-        body = ErrorModel(error=str(e)).model_dump(exclude_none=True)
+        body = ErrorModel(error=str(e))
         return ResponseModel(statusCode=500, body=body)
 
 @app.get("/findMissionKeywords")
@@ -179,10 +175,10 @@ async def findMissionKeywords(
     searchKernels: bool = False):
     try:
         result = pyspiceql.findMissionKeywords(key, mission, searchKernels)
-        body = ResultModel(result=result).model_dump(by_alias=True, exclude_none=True)
+        body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
-        body = ErrorModel(error=str(e)).model_dump(exclude_none=True)
+        body = ErrorModel(error=str(e))
         return ResponseModel(statusCode=500, body=body)
 
 @app.get("/findTargetKeywords")
@@ -192,10 +188,10 @@ async def findTargetKeywords(
     searchKernels: bool = False):
     try:
         result = pyspiceql.findTargetKeywords(key, mission, searchKernels)
-        body = ResultModel(result=result).model_dump(by_alias=True, exclude_none=True)
+        body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
-        body = ErrorModel(error=str(e)).model_dump(exclude_none=True)
+        body = ErrorModel(error=str(e))
         return ResponseModel(statusCode=500, body=body)
 
 @app.get("/frameTrace")
@@ -207,10 +203,10 @@ async def frameTrace(
     searchKernels: bool = False):
     try:
         result = pyspiceql.frameTrace(et, initialFrame, mission, ckQuality, searchKernels)
-        body = ResultModel(result=result).model_dump(by_alias=True, exclude_none=True)
+        body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
-        body = ErrorModel(error=str(e)).model_dump(exclude_none=True)
+        body = ErrorModel(error=str(e))
         return ResponseModel(statusCode=500, body=body)
     
 @app.get("/extractExactCkTimes")
@@ -223,9 +219,9 @@ async def extractExactCkTimes(
     searchKernels: bool = False):
     try:
         result = pyspiceql.extractExactCkTimes(observStart, observEnd, targetFrame, mission, ckQuality, searchKernels)
-        body = ResultModel(result=result).model_dump(by_alias=True, exclude_none=True)
+        body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
-        body = ErrorModel(error=str(e)).model_dump(exclude_none=True)
+        body = ErrorModel(error=str(e))
         return ResponseModel(statusCode=500, body=body)
     
