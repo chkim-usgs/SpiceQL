@@ -4,6 +4,7 @@ from ast import literal_eval
 from typing import Annotated, Any
 from fastapi import FastAPI, Query
 from pydantic import BaseModel, Field
+from starlette.responses import RedirectResponse
 import pyspiceql
 
 
@@ -27,7 +28,7 @@ app = FastAPI()
 # General endpoints
 @app.get("/")
 async def root():
-    return {"message": "Visit the /docs endpoint to see the Swagger UI."}
+    return RedirectResponse(url="/docs")
 
 @app.post("/customMessage")
 async def message(
