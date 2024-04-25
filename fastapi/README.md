@@ -5,7 +5,7 @@
 ### 1. Create conda environment
 Create the conda environment to run your local instance in:
 ```
-conda create -n spiceql-api -f environment.yaml
+conda env update -n spiceql-api -f environment.yaml
 ```
 
 ### 2. Set environment variables
@@ -18,7 +18,7 @@ conda env config vars set SPICEROOT=/path/to/isis_data
 ```
 
 ### 3. Run the app
-Inside the `app/` dir, run the following command:
+Within the `fastapi/` dir but outside the `app/` dir, run the following command:
 ```
 uvicorn app.main:app --reload --port 8080
 ```
