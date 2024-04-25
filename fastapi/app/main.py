@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from starlette.responses import RedirectResponse
 import pyspiceql
 
+SEARCH_KERNELS_BOOL = True
 
 # Models
 class MessageItem(BaseModel):
@@ -26,7 +27,7 @@ class ResponseModel(BaseModel):
 app = FastAPI()
 
 # General endpoints
-@app.get("/")
+@app.get("/", include_in_schema=False)
 async def root():
     return RedirectResponse(url="/docs")
 
@@ -47,12 +48,11 @@ async def getTargetStates(
     abcorr: str,
     mission: str,
     ckQuality: str = "",
-    spkQuality: str = "",
-    searchKernels: bool = False):
+    spkQuality: str = ""):
     try:
         if isinstance(ets, str):
             ets = literal_eval(ets)
-        result = pyspiceql.getTargetStates(ets, target, observer, frame, abcorr, mission, ckQuality, spkQuality, searchKernels)
+        result = pyspiceql.getTargetStates(ets, target, observer, frame, abcorr, mission, ckQuality, spkQuality, SEARCH_KERNELS_BOOL)
         body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
@@ -65,12 +65,11 @@ async def getTargetOrientations(
     toFrame: int,
     refFrame: int,
     mission: str,
-    ckQuality: str = "",
-    searchKernels: bool = False):
+    ckQuality: str = ""):
     try:
         if isinstance(ets, str):
             ets = literal_eval(ets)
-        result = pyspiceql.getTargetOrientations(ets, toFrame, refFrame, mission, ckQuality, searchKernels)
+        result = pyspiceql.getTargetOrientations(ets, toFrame, refFrame, mission, ckQuality, SEARCH_KERNELS_BOOL)
         body = ResultModel(result=result)  
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
@@ -81,10 +80,9 @@ async def getTargetOrientations(
 async def strSclkToEt(
     frameCode: int,
     sclk: str,
-    mission: str,
-    searchKernels: bool = False):
+    mission: str):
     try:
-        result = pyspiceql.strSclkToEt(frameCode, sclk, mission, searchKernels)
+        result = pyspiceql.strSclkToEt(frameCode, sclk, mission, SEARCH_KERNELS_BOOL)
         body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
@@ -95,10 +93,9 @@ async def strSclkToEt(
 async def doubleSclkToEt(
     frameCode: int,
     sclk: float,
-    mission: str,
-    searchKernels: bool = False):
+    mission: str):
     try:
-        result = pyspiceql.doubleSclkToEt(frameCode, sclk, mission, searchKernels)
+        result = pyspiceql.doubleSclkToEt(frameCode, sclk, mission, SEARCH_KERNELS_BOOL)
         body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
@@ -107,10 +104,9 @@ async def doubleSclkToEt(
 
 @app.get("/utcToEt")
 async def utcToEt(
-    utc: str,
-    searchKernels: bool = False):
+    utc: str):
     try:
-        result = pyspiceql.utcToEt(utc, searchKernels)
+        result = pyspiceql.utcToEt(utc, SEARCH_KERNELS_BOOL)
         body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
@@ -120,10 +116,9 @@ async def utcToEt(
 @app.get("/translateNameToCode")
 async def translateNameToCode(
     frame: str,
-    mission: str,
-    searchKernels: bool = False):
+    mission: str):
     try:
-        result = pyspiceql.translateNameToCode(frame, mission, searchKernels)
+        result = pyspiceql.translateNameToCode(frame, mission, SEARCH_KERNELS_BOOL)
         body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
@@ -133,10 +128,9 @@ async def translateNameToCode(
 @app.get("/translateCodeToName")
 async def translateCodeToName(
     frame: int,
-    mission: str,
-    searchKernels: bool = False):
+    mission: str):
     try:
-        result = pyspiceql.translateCodeToName(frame, mission, searchKernels)
+        result = pyspiceql.translateCodeToName(frame, mission, SEARCH_KERNELS_BOOL)
         body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
@@ -146,10 +140,9 @@ async def translateCodeToName(
 @app.get("/getFrameInfo")
 async def getFrameInfo(
     frame: int,
-    mission: str,
-    searchKernels: bool = False):
+    mission: str):
     try:
-        result = pyspiceql.getFrameInfo(frame, mission, searchKernels)
+        result = pyspiceql.getFrameInfo(frame, mission, SEARCH_KERNELS_BOOL)
         body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
@@ -159,10 +152,9 @@ async def getFrameInfo(
 @app.get("/getTargetFrameInfo")
 async def getTargetFrameInfo(
     targetId: int,
-    mission: str,
-    searchKernels: bool = False):
+    mission: str):
     try:
-        result = pyspiceql.getTargetFrameInfo(targetId, mission, searchKernels)
+        result = pyspiceql.getTargetFrameInfo(targetId, mission, SEARCH_KERNELS_BOOL)
         body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
@@ -172,10 +164,9 @@ async def getTargetFrameInfo(
 @app.get("/findMissionKeywords")
 async def findMissionKeywords(
     key: str,
-    mission: str,
-    searchKernels: bool = False):
+    mission: str):
     try:
-        result = pyspiceql.findMissionKeywords(key, mission, searchKernels)
+        result = pyspiceql.findMissionKeywords(key, mission, SEARCH_KERNELS_BOOL)
         body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
@@ -185,10 +176,9 @@ async def findMissionKeywords(
 @app.get("/findTargetKeywords")
 async def findTargetKeywords(
     key: str,
-    mission: str,
-    searchKernels: bool = False):
+    mission: str):
     try:
-        result = pyspiceql.findTargetKeywords(key, mission, searchKernels)
+        result = pyspiceql.findTargetKeywords(key, mission, SEARCH_KERNELS_BOOL)
         body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
@@ -200,10 +190,9 @@ async def frameTrace(
     et: float,
     initialFrame: int,
     mission: str,
-    ckQuality: str = "",
-    searchKernels: bool = False):
+    ckQuality: str = ""):
     try:
-        result = pyspiceql.frameTrace(et, initialFrame, mission, ckQuality, searchKernels)
+        result = pyspiceql.frameTrace(et, initialFrame, mission, ckQuality, SEARCH_KERNELS_BOOL)
         body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
@@ -216,10 +205,9 @@ async def extractExactCkTimes(
     observEnd: float,
     targetFrame: int,
     mission: str,
-    ckQuality: str = "",
-    searchKernels: bool = False):
+    ckQuality: str = ""):
     try:
-        result = pyspiceql.extractExactCkTimes(observStart, observEnd, targetFrame, mission, ckQuality, searchKernels)
+        result = pyspiceql.extractExactCkTimes(observStart, observEnd, targetFrame, mission, ckQuality, SEARCH_KERNELS_BOOL)
         body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
