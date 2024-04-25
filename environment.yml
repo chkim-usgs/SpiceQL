@@ -19,6 +19,11 @@ dependencies:
   - jsonschema
   - cereal
   - spdlog
+  # API dependencies #
+  - fastapi
+  - pydantic==2.6.3
+  - spiceql
+  - uvicorn
   - pip:
     - breathe
     - sphinx-material
