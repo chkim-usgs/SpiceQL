@@ -5,6 +5,7 @@ from typing import Annotated, Any
 from fastapi import FastAPI, Query
 from pydantic import BaseModel, Field
 from starlette.responses import RedirectResponse
+import numpy as np
 import pyspiceql
 
 SEARCH_KERNELS_BOOL = True
@@ -41,17 +42,28 @@ async def message(
 # SpiceQL endpoints
 @app.get("/getTargetStates")
 async def getTargetStates(
-    ets: Annotated[list[float], Query()] | str,
     target: str,
     observer: str,
     frame: str,
     abcorr: str,
     mission: str,
+    ets: Annotated[list[float], Query()] | str | None = None,
+    startEts: float | None = None,
+    exposureDuration: float | None = None,
+    numOfExposures: int | None = None,
     ckQuality: str = "",
     spkQuality: str = ""):
     try:
-        if isinstance(ets, str):
-            ets = literal_eval(ets)
+        if ets is not None:
+            if isinstance(ets, str):
+                ets = literal_eval(ets)
+        else:
+            if all(v is not None for v in [startEts, exposureDuration, numOfExposures]):
+                stopEts = (exposureDuration * numOfExposures) + startEts
+                etsNpArray = np.arange(startEts, stopEts, exposureDuration)
+                ets = list(etsNpArray)
+            else:
+                raise Exception("Verify that a startEts, exposureDuration, and numOfExposures are being passed correctly.")
         result = pyspiceql.getTargetStates(ets, target, observer, frame, abcorr, mission, ckQuality, spkQuality, SEARCH_KERNELS_BOOL)
         body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
@@ -61,14 +73,25 @@ async def getTargetStates(
     
 @app.get("/getTargetOrientations")
 async def getTargetOrientations(
-    ets: Annotated[list[float], Query()] | str,
     toFrame: int,
     refFrame: int,
     mission: str,
+    ets: Annotated[list[float], Query()] | str | None = None,
+    startEts: float | None = None,
+    exposureDuration: float | None = None,
+    numOfExposures: int | None = None,
     ckQuality: str = ""):
     try:
-        if isinstance(ets, str):
-            ets = literal_eval(ets)
+        if ets is not None:
+            if isinstance(ets, str):
+                ets = literal_eval(ets)
+        else:
+            if all(v is not None for v in [startEts, exposureDuration, numOfExposures]):
+                stopEts = (exposureDuration * numOfExposures) + startEts
+                etsNpArray = np.arange(startEts, stopEts, exposureDuration)
+                ets = list(etsNpArray)
+            else:
+                raise Exception("Verify that a startEts, exposureDuration, and numOfExposures are being passed correctly.")
         result = pyspiceql.getTargetOrientations(ets, toFrame, refFrame, mission, ckQuality, SEARCH_KERNELS_BOOL)
         body = ResultModel(result=result)  
         return ResponseModel(statusCode=200, body=body)

@@ -1,8 +1,0 @@
-channels:
-  - conda-forge
-  
-dependencies:
-  - fastapi
-  - pydantic==2.6.3
-  - spiceql
-  - uvicorn

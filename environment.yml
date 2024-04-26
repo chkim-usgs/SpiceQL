@@ -23,6 +23,7 @@ dependencies:
   - fastapi
   - pydantic==2.6.3
   - uvicorn
+  - numpy
   - pip:
     - breathe
     - sphinx-material
