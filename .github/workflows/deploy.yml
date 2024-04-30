@@ -85,6 +85,5 @@ jobs:
       - name: Upload to S3
         working-directory: ${{github.workspace}}/
         run: |
-          ls -l share/doc/SpiceQL/sphinx/
           aws s3 sync --delete site/ s3://asc-public-docs/software_manuals/spiceql/
           
