@@ -20,15 +20,15 @@
             "kernels": ["moon_pa_de421_1900-2050.bpc", "de421.bsp"]
         },
         "pck": {
-            "kernels": ["moon_080317.tf$", "moon_assoc_me.tf$"]
+            "kernels": ["moon_080317.tf$", "moon_assoc_me.tf$"],
+            "deps" : ["/base/pck"]
         },
         "fk": {
             "kernels": ["apollo15.[0-9]{4}.tf", "apollo15_v2.[0-9]{4}.tf"]
         },
         "sclk": {
             "kernels": ["apollo15.[0-9]{4}.tsc"]
-        },
-        "deps" : ["/base/pck"]
+        }
     },
     "metric": {
         "ik": {

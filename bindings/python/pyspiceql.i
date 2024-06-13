@@ -70,3 +70,4 @@ namespace std {
 %include "spice_types.i"
 %include "utils.i"
 %include "memoized_functions.i"
+%include "inventory.i"

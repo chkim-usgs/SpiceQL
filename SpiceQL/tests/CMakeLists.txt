@@ -1,11 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 
 # A lot of linux OSes do not support C++20
-if (APPLE)
-  set(CMAKE_CXX_STANDARD 20)
-else()
-  set(CMAKE_CXX_STANDARD 17)
-endif()
+set(CMAKE_CXX_STANDARD 20)
 
 find_package(CSpice REQUIRED)
 
@@ -23,6 +19,7 @@ set (SPICEQL_TEST_SOURCE    ${SPICEQL_TEST_DIRECTORY}/TestUtilities.cpp
                             ${SPICEQL_TEST_DIRECTORY}/IoTests.cpp
                             ${SPICEQL_TEST_DIRECTORY}/KernelTests.cpp
                             ${SPICEQL_TEST_DIRECTORY}/MemoTests.cpp
+                            ${SPICEQL_TEST_DIRECTORY}/InventoryTests.cpp 
                             ${SPICEQL_TEST_DIRECTORY}/FunctionalTestsSpiceQueries.cpp
                             ${SPICEQL_TEST_DIRECTORY}/FunctionalTestsConfig.cpp)
 
@@ -43,6 +40,8 @@ target_link_libraries(runSpiceQLTests
                       )
 
 
-target_include_directories(runSpiceQLTests PRIVATE ${CMAKE_SOURCE_DIR}/submodules/redis-plus-plus/src/ ${CMAKE_SOURCE_DIR}/submodules/hippomocks/ )
+target_include_directories(runSpiceQLTests PRIVATE ${CMAKE_SOURCE_DIR}/submodules/redis-plus-plus/src/ 
+                                                   ${CMAKE_SOURCE_DIR}/submodules/hippomocks/ 
+                                                   ${CMAKE_SOURCE_DIR}/submodules/BTree/include/)
 
 gtest_discover_tests(runSpiceQLTests WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/SpiceQL/tests/)
