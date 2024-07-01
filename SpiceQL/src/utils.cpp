@@ -1262,6 +1262,22 @@ namespace SpiceQL {
     return missionKeys;
   }
 
+  json getMissionTranslationMap() {
+    fs::path dbPath = getConfigDirectory();
+    // fs::path translationRelPath = "translation/spiceql_mission_map.json";
+    fs::path translationConfigPath = dbPath / "translation" / "spiceql_mission_map.json";
+    // fs::path translationConfigPath = dbPath / translationRelPath;
+    std::cout << "translationConfigPath=" << translationConfigPath << std::endl;
+
+    if (fs::exists(translationConfigPath)) {
+      ifstream i(translationConfigPath);
+      json conf;
+      i >> conf;
+      return conf;
+    }
+    throw invalid_argument(fmt::format("Translation config file \"{}\" not found", translationConfigPath));
+  }
+
 
   void resolveConfigDependencies(json &config, const json &dependencies) {
     SPDLOG_TRACE("IN resolveConfigDependencies");
@@ -1453,5 +1469,15 @@ namespace SpiceQL {
     }
 
     return kernels;
+  }
+
+  string getMissionTranslation(string mission) {
+    json missionMap = getMissionTranslationMap();
+    if (missionMap.contains(mission)) {
+      string spiceqlMission = missionMap[mission];
+      std::cout << "spiceqlMission=" << spiceqlMission << std::endl;
+      return spiceqlMission;
+    }
+    throw runtime_error(fmt::format("Given mission {} is not available in the translation map.", mission));
   }
 }

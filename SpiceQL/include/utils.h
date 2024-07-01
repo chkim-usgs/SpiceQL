@@ -398,6 +398,8 @@ namespace SpiceQL {
    **/
    std::string getMissionKeys(nlohmann::json config);
 
+   nlohmann::json getMissionTranslationMap();
+
 
    /**
     * @brief resolve the dependencies in a config in place
@@ -516,4 +518,6 @@ namespace SpiceQL {
    * @param mission mission name of the config file
    */
   nlohmann::json loadSelectKernels(std::string kernelType, std::string mission);
+
+  std::string getMissionTranslation(std::string mission);
 }
