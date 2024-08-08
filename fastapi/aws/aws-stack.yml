@@ -136,7 +136,7 @@ Resources:
       LaunchType: FARGATE
       Cluster:
         Ref: SpiceQLProdECSClusterSlot1
-      DesiredCount: 20
+      DesiredCount: 1
       TaskDefinition:
         Ref: SpiceQLProdTaskDefSlot1
       DeploymentConfiguration:
