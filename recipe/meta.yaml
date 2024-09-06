@@ -7,9 +7,9 @@ package:
 
 source:
   - folder: .
-    url: https://code.usgs.gov/astrogeology/spiceql/-/archive/{{ version }}/spiceql-{{ version }}.tar.gz
-    sha256: df51ef41839b8d4e09153922ddf272c2da862fc0f126b35d978d8ff81ce8044e
-
+    path: ../
+    # url: https://code.usgs.gov/astrogeology/spiceql/-/archive/{{ version }}/spiceql-{{ version }}.tar.gz
+    # sha256: df51ef41839b8d4e09153922ddf272c2da862fc0f126b35d978d8ff81ce8044e
   # submodules
   - folder: submodules/gularkfilesystem
     url: https://github.com/gulrak/filesystem/archive/fcea331ebb8273581cef3e91a131e3d7877f7dfd.zip

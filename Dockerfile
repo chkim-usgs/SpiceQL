@@ -49,4 +49,6 @@ WORKDIR ${SPICEQL_REPO_ROOT}/fastapi
 
 EXPOSE 8080
 
-CMD nginx && uvicorn app.main:app --reload --port 8080
+copy Entrypoint.sh . 
+
+CMD Entrypoint.sh
