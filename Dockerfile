@@ -5,21 +5,21 @@ SHELL ["/bin/bash", "-c"]
 # Clone SpiceQL repo instead of copying?
 #git clone git@github.com:DOI-USGS/SpiceQL.git /repo
 
-# RUN git clone https://github.com/DOI-USGS/SpiceQL.git /repo --recursive 
-# RUN echo $(ls /repo)
-# RUN chmod -R 755 /repo
-
-RUN mkdir /repo    
-COPY . /repo
+RUN git clone https://github.com/chkim-usgs/SpiceQL.git /repo --recursive --branch docker
 RUN echo $(ls /repo)
 RUN chmod -R 755 /repo
+
+# RUN mkdir /repo    
+# COPY . /repo
+# RUN echo $(ls /repo)
+# RUN chmod -R 755 /repo
 
 # Set repo root env
 ENV SPICEQL_REPO_ROOT /repo
 
 # Need to mount ISIS data area
 ENV SSPICE_DEBUG=TRUE
-ENV SPICEROOT=/mnt/isis_data
+ENV SPICEROOT=/mnt/isisdata/
 ENV SPICEQL_LOG_LEVEL=TRACE
 
 RUN apt-get update && apt-get install build-essential -y
@@ -49,6 +49,9 @@ WORKDIR ${SPICEQL_REPO_ROOT}/fastapi
 
 EXPOSE 8080
 
-copy Entrypoint.sh . 
+copy Entrypoint.sh /
+RUN chmod +x /Entrypoint.sh
 
-CMD Entrypoint.sh
+RUN mkdir /mnt/isisdata/
+
+ENTRYPOINT ["/bin/bash", "/Entrypoint.sh"]

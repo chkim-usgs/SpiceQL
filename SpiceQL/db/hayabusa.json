@@ -10,7 +10,7 @@
             "reconstructed" : {
                 "kernels": ["itokawa_gaskell_n[0-9]{1}.tpc"]
             },
-          "deps" : ["/base/pck"]
+            "deps" : ["/base/pck"]
         },
         "ck": {
             "reconstructed": {

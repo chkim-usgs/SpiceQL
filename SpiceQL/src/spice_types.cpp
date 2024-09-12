@@ -13,6 +13,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "inventory.h"
 #include "spice_types.h"
 #include "query.h"
 #include "utils.h"
@@ -221,14 +222,21 @@ namespace SpiceQL {
   }
 
   double strSclkToEt(int frameCode, string sclk, string mission, bool searchKernels) {
+      SPDLOG_TRACE("calling strSclkToEt({}, {}, {}, {})", frameCode, sclk, mission, searchKernels);
       Config missionConf;
       json sclks;
 
       if (searchKernels) {
-        sclks = loadSelectKernels("sclk", mission);
+        // sclks = loadSelectKernels("sclk", mission);
+        Inventory inv; 
+        sclks = inv.search_for_kernelset(mission, {"lsk", "fk", "sclk"});
+        cout << sclks << endl;
       }
 
       KernelSet sclkSet(sclks);
+
+      // we want the platforms code, if they passs in an instrument code (e.g. -85600), truncate it to (-85)
+      frameCode = (abs(frameCode / 1000) > 0) ? frameCode/1000 : frameCode; 
 
       SpiceDouble et;
       checkNaifErrors();
@@ -244,10 +252,16 @@ namespace SpiceQL {
       json sclks;
 
       if (searchKernels) {
-        sclks = loadSelectKernels("sclk", mission);
+        // sclks = loadSelectKernels("sclk", mission);
+        Inventory inv; 
+        sclks = inv.search_for_kernelset(mission, {"lsk", "fk", "sclk"});
+        cout << sclks << endl;
       }
 
       KernelSet sclkSet(sclks);
+      
+      // we want the platforms code, if they passs in an instrument code (e.g. -85600), truncate it to (-85)
+      frameCode = (abs(frameCode / 1000) > 0) ? frameCode/1000 : frameCode; 
 
       SpiceDouble et;
       checkNaifErrors();

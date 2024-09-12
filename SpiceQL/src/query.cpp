@@ -304,6 +304,18 @@ namespace SpiceQL {
         kernelVect.insert(kernelVect.end(), subarr.begin(), subarr.end());
       } 
     }
+    if (pointers.empty() && kernels.is_object()) { 
+      // Assume it's in the format {"sclk" : ["path1", "path2"], "ck" : ["path1"], ...}  
+      for (auto& [key, val] : kernels.items()) { 
+        SPDLOG_TRACE("Furnishing Kernels of Type: {}", key);
+        if(!val.empty()) { 
+           vector<string> ks = jsonArrayToVector(val);
+          for (auto &kernel : ks) { 
+            kernelVect.push_back(kernel);
+          } 
+        }
+      }
+    }
     else {
       for (auto & p : pointers) {
         if (!kernels[p].empty()) {

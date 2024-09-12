@@ -15,8 +15,7 @@
             "kernels": ["naif[0-9]{4}.tls$"]
         },
         "pck": {
-            "kernels": ["PCK[0-9]{5}.TPC$"],
-            "deps" : ["/base/pck"]
+            "kernels": ["pck0000[0-9].tpc", "PCK[0-9]{5}.TPC$"]
         },
         "sclk": {
             "kernels": ["SMART1_[0-9]{6}_STEP.TSC$"]

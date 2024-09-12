@@ -40,7 +40,9 @@
       "iak": {
         "kernels": "apollo16MetricAddendum[0-9]{3}.ti"
       },
-      "deps" : ["/apollo16"]
+      "pck" : { 
+        "deps" : ["base/pck"]
+      }
     },
     "panoramic": {
       "ik": {

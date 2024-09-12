@@ -21,7 +21,8 @@
             "kernels": ["naif0009.tls$"]
         },
         "pck": {
-            "kernels": ["pck00010_msgr_v23_europa2020.tpc$"]
+            "kernels": ["pck00010_msgr_v23_europa2020.tpc$"],
+            "deps" : ["/base/pck"]
         },
         "sclk": {
             "kernels": ["vg2[0-9]{5}.tsc$"]
@@ -30,7 +31,6 @@
             "reconstructed": {
                 "kernels": ["vg[r]?2_jup[0-9]{0,3}.bsp$", "vg[r]?2_sat[0-9]{0,3}.bsp$", "vg[r]?2_ura[0-9]{0,3}.bsp$", "vg[r]?2_nep[0-9]{0,3}.bsp$"]
             }
-        },
-        "deps" : ["/base/pck"]
+        }
     }
 }

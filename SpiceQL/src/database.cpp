@@ -168,6 +168,8 @@ namespace SpiceQL {
                                   Kernel::Quality ckQuality, Kernel::Quality spkQuality, bool enforce_quality) { 
     // get time dep kernels first 
     json kernels;
+    instrument = toLower(instrument);
+    
     if (start_time > stop_time) { 
       throw range_error("start time cannot be greater than stop time.");
     }
@@ -175,6 +177,7 @@ namespace SpiceQL {
     for (auto &type: types) { 
       // load time kernels
       if (type == Kernel::Type::CK || type == Kernel::Type::SPK) { 
+        SPDLOG_DEBUG("Trying to search time dependent kernels");
         TimeIndexedKernels *time_indices = nullptr;
         bool found = false;        
 
@@ -262,6 +265,7 @@ namespace SpiceQL {
         SPDLOG_TRACE("NUMBER OF ITERATIONS: {}", iterations); 
       }
       else { // text/non time based kernels
+        SPDLOG_DEBUG("Trying to search time independant kernels");
         string key = instrument+":"+Kernel::translateType(type)+":"+"kernels"; 
         SPDLOG_DEBUG("GETTING {} with key {}", Kernel::translateType(type), key);
         if (m_nontimedep_kerns.contains(key) && !m_nontimedep_kerns[key].empty()) 
