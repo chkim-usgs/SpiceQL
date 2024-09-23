@@ -14,7 +14,6 @@ using namespace std::chrono;
 #include <SpiceUsr.h>
 #include "memo.h"
 #include "query.h"
-#include "database.h"
 
 #include <spdlog/spdlog.h>
 

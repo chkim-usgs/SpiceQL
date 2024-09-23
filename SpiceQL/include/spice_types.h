@@ -15,7 +15,9 @@
  * 
  */
 namespace SpiceQL {
-   
+  int load(std::string path, bool force_refurnsh); 
+  int unload(std::string path);
+
   /**
    * @brief Base Kernel class
    *
@@ -117,7 +119,7 @@ namespace SpiceQL {
        * 
        * @param other some other Kernel instance
        */
-      Kernel(Kernel &other);
+      // Kernel(Kernel &other);
 
 
       /**

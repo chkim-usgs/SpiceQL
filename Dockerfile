@@ -5,14 +5,14 @@ SHELL ["/bin/bash", "-c"]
 # Clone SpiceQL repo instead of copying?
 #git clone git@github.com:DOI-USGS/SpiceQL.git /repo
 
-RUN git clone https://github.com/chkim-usgs/SpiceQL.git /repo --recursive --branch docker
-RUN echo $(ls /repo)
-RUN chmod -R 755 /repo
-
-# RUN mkdir /repo    
-# COPY . /repo
+# RUN git clone https://github.com/chkim-usgs/SpiceQL.git /repo --recursive --branch docker
 # RUN echo $(ls /repo)
 # RUN chmod -R 755 /repo
+
+ RUN mkdir /repo    
+ COPY . /repo
+ RUN echo $(ls /repo)
+ RUN chmod -R 755 /repo
 
 # Set repo root env
 ENV SPICEQL_REPO_ROOT /repo

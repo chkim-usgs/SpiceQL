@@ -307,10 +307,11 @@ namespace SpiceQL {
     if (pointers.empty() && kernels.is_object()) { 
       // Assume it's in the format {"sclk" : ["path1", "path2"], "ck" : ["path1"], ...}  
       for (auto& [key, val] : kernels.items()) { 
-        SPDLOG_TRACE("Furnishing Kernels of Type: {}", key);
+        SPDLOG_TRACE("Getting Kernels of Type: {}", key);
         if(!val.empty()) { 
            vector<string> ks = jsonArrayToVector(val);
           for (auto &kernel : ks) { 
+            SPDLOG_TRACE("Adding: {}", kernel);
             kernelVect.push_back(kernel);
           } 
         }
@@ -325,7 +326,7 @@ namespace SpiceQL {
           }
         }
         else {
-          SPDLOG_WARN("Unable to furnish {}, with kernels {}", p.to_string(), kernels[p].dump());
+          SPDLOG_WARN("Unable to get {}, with kernels {}", p.to_string(), kernels[p].dump());
         }
       }    
     }

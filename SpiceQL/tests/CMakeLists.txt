@@ -37,6 +37,7 @@ target_link_libraries(runSpiceQLTests
                       gmock
                       Threads::Threads
                       spdlog::spdlog_header_only
+                      HighFive
                       )
 
 

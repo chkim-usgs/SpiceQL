@@ -15,7 +15,7 @@
 
 
 #include "config.h"
-#include "database.h"
+#include "inventoryimpl.h"
 #include "utils.h"
 #include "query.h"
 #include "memo.h"
@@ -72,7 +72,7 @@ namespace SpiceQL {
   }
 
 
-  Database::Database(bool force_regen) : m_required_kernels() { 
+  InventoryImpl::InventoryImpl(bool force_regen) : m_required_kernels() { 
     fs::path db_root = get_root_dir();
 
     // create the database 
@@ -125,8 +125,11 @@ namespace SpiceQL {
 
               // Doing it bracketless, there are too many brackets
               for (auto &subarr: kernel_obj[ptr]) 
-                for (auto &kernel : subarr) 
-                  kernel_vec.push_back(kernel); 
+                for (auto &kernel : subarr) { 
+                  string k = kernel.get<string>();
+                  regex_replace(k, std::regex((string)db_root), "$SPICEROOT/");
+                  kernel_vec.push_back(k); 
+                }
               m_nontimedep_kerns[btree_key] = kernel_vec; 
             } 
           }
@@ -142,17 +145,23 @@ namespace SpiceQL {
 
   }
 
-  string Database::get_root_dir() { 
+  string InventoryImpl::get_root_dir() { 
     fs::path cache_dir = Memo::getCacheDir();
     return cache_dir / "dbindexes"; 
   }
 
 
-  void Database::read_database() { 
+  void InventoryImpl::read_database() { 
     fs::path db_root = get_root_dir(); 
+    fs::path non_time_dep_file = db_root/"non_time_dep.bin";
 
+    if (!fs::exists(non_time_dep_file)) { 
+      throw runtime_error("DB for text kernels (" + non_time_dep_file.generic_string() + ") does not exist");
+    }
+
+    cout << "reading db" << endl;
     // kernels are simple, store as a binary archive
-    std::ifstream ofs_index(db_root/"non_time_dep.bin");
+    std::ifstream ofs_index(non_time_dep_file);
     cereal::BinaryInputArchive ia(ofs_index);
     ia >> m_nontimedep_kerns;
 
@@ -164,12 +173,12 @@ namespace SpiceQL {
   }
 
 
-  json Database::search_for_kernelset(string instrument, vector<Kernel::Type> types, double start_time, double stop_time,
+  json InventoryImpl::search_for_kernelset(string instrument, vector<Kernel::Type> types, double start_time, double stop_time,
                                   Kernel::Quality ckQuality, Kernel::Quality spkQuality, bool enforce_quality) { 
     // get time dep kernels first 
     json kernels;
     instrument = toLower(instrument);
-    
+    cout << "dearching" << endl;
     if (start_time > stop_time) { 
       throw range_error("start time cannot be greater than stop time.");
     }
@@ -276,7 +285,7 @@ namespace SpiceQL {
   }
   
 
-  void Database::write_database() { 
+  void InventoryImpl::write_database() { 
     fs::path db_root = get_root_dir(); 
 
     for (auto it=m_timedep_kerns.begin(); it!=m_timedep_kerns.end(); ++it) {
@@ -288,7 +297,7 @@ namespace SpiceQL {
       fs::create_directories(db_subdir);
       
       TimeIndexedKernels *kernels = m_timedep_kerns[it->first];       
-      
+       
       // kernels are simple, store as a binary archive
       std::ofstream ofs_index(db_subdir/"index.bin");
       cereal::BinaryOutputArchive oa(ofs_index);

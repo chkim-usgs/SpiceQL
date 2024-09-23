@@ -57,6 +57,7 @@ if(SPICEQL_BUILD_LIB)
   find_package(cereal REQUIRED)
   find_package(spdlog REQUIRED)
   find_package(hiredis REQUIRED)
+  find_package(HighFive REQUIRED)
 
   set(SPICEQL_INSTALL_INCLUDE_DIR "include/SpiceQL")
   set(SPICEQL_SRC_FILES   ${CMAKE_CURRENT_SOURCE_DIR}/SpiceQL/src/spiceql.cpp 
@@ -67,7 +68,7 @@ if(SPICEQL_BUILD_LIB)
                           ${CMAKE_CURRENT_SOURCE_DIR}/SpiceQL/src/memoized_functions.cpp
                           ${CMAKE_CURRENT_SOURCE_DIR}/SpiceQL/src/config.cpp
                           ${CMAKE_CURRENT_SOURCE_DIR}/SpiceQL/src/inventory.cpp
-                          ${CMAKE_CURRENT_SOURCE_DIR}/SpiceQL/src/database.cpp)
+                          ${CMAKE_CURRENT_SOURCE_DIR}/SpiceQL/src/inventoryimpl.cpp)
 
 
   set(SPICEQL_HEADER_FILES ${SPICEQL_BUILD_INCLUDE_DIR}/spiceql.h
@@ -78,7 +79,7 @@ if(SPICEQL_BUILD_LIB)
                            ${SPICEQL_BUILD_INCLUDE_DIR}/query.h
                            ${SPICEQL_BUILD_INCLUDE_DIR}/config.h
                            ${SPICEQL_BUILD_INCLUDE_DIR}/inventory.h
-                           ${SPICEQL_BUILD_INCLUDE_DIR}/database.h)
+                           ${SPICEQL_BUILD_INCLUDE_DIR}/inventoryimpl.h)
 
   set(SPICEQL_PRIVATE_HEADER_FILES ${SPICEQL_BUILD_INCLUDE_DIR}/memo.h)
 
@@ -140,6 +141,7 @@ if(SPICEQL_BUILD_LIB)
                         redis++ 
                         cspice
                         spdlog::spdlog_header_only
+                        HighFive
                         )
    
   install(TARGETS SpiceQL LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})

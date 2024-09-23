@@ -29,6 +29,7 @@
 #include "query.h"
 #include "spice_types.h"
 #include "utils.h"
+#include "inventory.h"
 
 using json = nlohmann::json;
 using namespace std;
@@ -209,7 +210,7 @@ namespace SpiceQL {
     json ephemKernels = {};
 
     if (searchKernels) {
-      ephemKernels = searchAndRefineKernels(mission, {ets.front(), ets.back()}, ckQuality, spkQuality, {"sclk", "ck", "spk", "pck", "tspk"});
+      ephemKernels = Inventory::search_for_kernelset(mission, {"sclk", "ck", "spk", "pck", "tspk"}, ets.front(), ets.back(), ckQuality, spkQuality);
     }
 
     auto start = high_resolution_clock::now();
@@ -242,7 +243,7 @@ namespace SpiceQL {
     json ephemKernels = {};
 
     if (searchKernels) {
-      ephemKernels = searchAndRefineKernels(mission, {observStart, observEnd}, ckQuality, "na", {"ck", "sclk"});
+      ephemKernels = Inventory::search_for_kernelset(mission, {"ck", "sclk"}, observStart, observEnd, ckQuality, "na");
     }
 
     KernelSet ephemSet(ephemKernels);
@@ -446,7 +447,7 @@ namespace SpiceQL {
     json ephemKernels = {};
 
     if (searchKernels) {
-      ephemKernels = searchAndRefineKernels(mission, {ets.front(), ets.back()}, ckQuality, "na", {"sclk", "ck", "pck", "fk", "tspk"});
+      ephemKernels = Inventory::search_for_kernelset(mission, {"sclk", "ck", "pck", "fk", "tspk"}, ets.front(), ets.back(), ckQuality, "na");
     }
 
     auto start = high_resolution_clock::now();
@@ -477,7 +478,7 @@ namespace SpiceQL {
     json ephemKernels;
 
     if (searchKernels) {
-      ephemKernels = searchAndRefineKernels(mission, {et}, ckQuality, "na", {"sclk", "ck", "pck", "fk", "tspk"});
+      ephemKernels = Inventory::search_for_kernelset(mission, {"sclk", "ck", "pck", "fk", "tspk"}, et, et, ckQuality, "na");
     }
 
     KernelSet ephemSet(ephemKernels);
@@ -1354,8 +1355,9 @@ namespace SpiceQL {
       errprt_c("SET", sizeof(printAct), printAct);     // ... and print nothing
       initialized = true;
     }
-
+    cout << "checking for failed_c" << endl;
     if(!failed_c()) return true;
+    cout << "failed" << endl;
 
     // This method has been documented with the information provided
     //   from the NAIF documentation at:
@@ -1391,7 +1393,7 @@ namespace SpiceQL {
     }
     
     errMsg += "Error Occured:" + string(naifShort) + " " + string(naifLong);
-
+    cout << errMsg << endl;
     throw runtime_error(errMsg);
   }
 

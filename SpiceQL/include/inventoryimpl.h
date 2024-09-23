@@ -27,9 +27,9 @@ namespace SpiceQL {
   };
 
 
-  class Database {
+  class InventoryImpl {
     public:
-    Database(bool force_regen=false); 
+    InventoryImpl(bool force_regen=false); 
     std::string get_root_dir();
     void read_database();
     void write_database();
