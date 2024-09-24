@@ -19,7 +19,8 @@ ENV SPICEQL_REPO_ROOT /repo
 
 # Need to mount ISIS data area
 ENV SSPICE_DEBUG=TRUE
-ENV SPICEROOT=/mnt/isisdata/
+ENV SPICEROOT=/home/ec2-user/efs_prod/isis_data/
+ENV SPICEQL_CACHE_DIR=/home/ec2-user/efs_prod/spiceql_cache/
 ENV SPICEQL_LOG_LEVEL=TRACE
 
 RUN apt-get update && apt-get install build-essential -y
@@ -49,7 +50,7 @@ WORKDIR ${SPICEQL_REPO_ROOT}/fastapi
 
 EXPOSE 8080
 
-copy Entrypoint.sh /
+COPY Entrypoint.sh /
 RUN chmod +x /Entrypoint.sh
 
 RUN mkdir /mnt/isisdata/
