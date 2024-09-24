@@ -41,7 +41,7 @@
         "kernels": "apollo16MetricAddendum[0-9]{3}.ti"
       },
       "pck" : { 
-        "deps" : ["base/pck"]
+        "deps" : ["/base/pck"]
       }
     },
     "panoramic": {
