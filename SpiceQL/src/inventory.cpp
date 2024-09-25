@@ -24,7 +24,6 @@ namespace SpiceQL {
                 enum_types.push_back(Kernel::translateType(e));
             }
 
-            cout << "entering search" << endl;
             return impl.search_for_kernelset(instrument, enum_types, start_time, stop_time, enum_ck_quality, enum_spk_quality, enforce_quality);
         }
 

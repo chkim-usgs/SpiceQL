@@ -159,7 +159,6 @@ namespace SpiceQL {
       throw runtime_error("DB for text kernels (" + non_time_dep_file.generic_string() + ") does not exist");
     }
 
-    cout << "reading db" << endl;
     // kernels are simple, store as a binary archive
     std::ifstream ofs_index(non_time_dep_file);
     cereal::BinaryInputArchive ia(ofs_index);
@@ -178,13 +177,12 @@ namespace SpiceQL {
     // get time dep kernels first 
     json kernels;
     instrument = toLower(instrument);
-    cout << "dearching" << endl;
     if (start_time > stop_time) { 
       throw range_error("start time cannot be greater than stop time.");
     }
 
     for (auto &type: types) { 
-      // load time kernels
+      // load time kernel
       if (type == Kernel::Type::CK || type == Kernel::Type::SPK) { 
         SPDLOG_DEBUG("Trying to search time dependent kernels");
         TimeIndexedKernels *time_indices = nullptr;

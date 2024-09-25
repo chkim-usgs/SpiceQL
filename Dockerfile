@@ -46,7 +46,7 @@ WORKDIR ${SPICEQL_REPO_ROOT}/fastapi
 
 EXPOSE 8080
 
-copy Entrypoint.sh /
+COPY Entrypoint.sh /
 RUN chmod +x /Entrypoint.sh
 
 RUN mkdir /mnt/isisdata/

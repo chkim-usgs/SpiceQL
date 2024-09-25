@@ -1355,9 +1355,8 @@ namespace SpiceQL {
       errprt_c("SET", sizeof(printAct), printAct);     // ... and print nothing
       initialized = true;
     }
-    cout << "checking for failed_c" << endl;
+    
     if(!failed_c()) return true;
-    cout << "failed" << endl;
 
     // This method has been documented with the information provided
     //   from the NAIF documentation at:
@@ -1393,7 +1392,6 @@ namespace SpiceQL {
     }
     
     errMsg += "Error Occured:" + string(naifShort) + " " + string(naifLong);
-    cout << errMsg << endl;
     throw runtime_error(errMsg);
   }
 

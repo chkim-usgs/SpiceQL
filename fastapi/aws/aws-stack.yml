@@ -29,14 +29,23 @@ Resources:
     Type: 'AWS::ECS::TaskDefinition'
     Properties:
       RequiresCompatibilities:
-        - FARGATE
+        - EC2 #FARGATE
       ExecutionRoleArn: 'arn:aws:iam::950438895271:role/csr-EcsTask-Role'
       Cpu: 4096
       Memory: 8192
       NetworkMode: awsvpc
+      Volumes:
+        - Name: spiceql-ebs
+          ConfiguredAtLaunch: true
+          DockerVolumeConfiguration:
+            Scope: shared
       ContainerDefinitions:
         - Name: spiceql_prod_slot1_container
-          Image: '950438895271.dkr.ecr.us-west-2.amazonaws.com/spiceql:dev'
+          Image: 950438895271.dkr.ecr.us-west-2.amazonaws.com/spiceql:latest'
+          MountPoints:
+            - SourceVolume: spiceql-ebs
+              ContainerPath: /mnt/isis_data
+              ReadOnly: true
           PortMappings:
             - ContainerPort: 80
           LogConfiguration:
@@ -47,7 +56,7 @@ Resources:
               awslogs-stream-prefix: ecs
           Environment: 
             - Name: SPICEROOT
-              Value: /isis_data
+              Value: /mnt/isis_data
             - Name: SPICEQL_LOG_LEVEL
               Value: DEBUG
             - Name: SSPICE_DEBUG

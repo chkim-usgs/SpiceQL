@@ -48,8 +48,6 @@ class KernelDataDirectories : public ::testing::Test  {
 
 class LroKernelSet : public ::testing::Test  {
   protected:
-    KernelPool &pool = KernelPool::getInstance();
-    
     fs::path root;
     string lskPath;
     string sclkPath;
