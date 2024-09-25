@@ -305,8 +305,8 @@ namespace SpiceQL {
     json kernelsToLoad = {};
 
     if (mission != "" && searchKernels) {
-      kernelsToLoad["base"] = Inventory::search_for_kernelset("base", {"pck"});
-      kernelsToLoad[mission] = Inventory::search_for_kernelset(mission, {"pck"});
+      kernelsToLoad["base"]["kernels"] = Inventory::search_for_kernelset("base", {"pck"});
+      kernelsToLoad[mission]["kernels"] = Inventory::search_for_kernelset(mission, {"pck"});
     }
     KernelSet kset(kernelsToLoad);
     return findKeywords(key);
@@ -322,8 +322,8 @@ namespace SpiceQL {
     json kernelsToLoad = {};
 
     if (mission != "" && searchKernels) {
-      kernelsToLoad["base"] = Inventory::search_for_kernelset("base", {"fk"});
-      kernelsToLoad[mission] = Inventory::search_for_kernelset(mission, {"fk"});
+      kernelsToLoad["base"]["kernels"] = Inventory::search_for_kernelset("base", {"fk"});
+      kernelsToLoad[mission]["kernels"] = Inventory::search_for_kernelset(mission, {"fk"});
     }
     KernelSet kset(kernelsToLoad);
 
