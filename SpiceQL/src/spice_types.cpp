@@ -302,13 +302,15 @@ namespace SpiceQL {
 
 
   json findTargetKeywords(string key, string mission, bool searchKernels) {
-    json kernelsToLoad = {};
+    json baseKernels = {};
+    json missionKernels = {};
 
     if (mission != "" && searchKernels) {
-      kernelsToLoad["base"]["kernels"] = Inventory::search_for_kernelset("base", {"pck"});
-      kernelsToLoad[mission]["kernels"] = Inventory::search_for_kernelset(mission, {"pck"});
+      baseKernels = Inventory::search_for_kernelset("base", {"pck"});
+      missionKernels = Inventory::search_for_kernelset(mission, {"pck"});
     }
-    KernelSet kset(kernelsToLoad);
+    KernelSet baseKset(baseKernels);
+    KernelSet missionKset(missionKernels);
     return findKeywords(key);
   }
 
@@ -319,13 +321,15 @@ namespace SpiceQL {
     SpiceBoolean found;
 
     json frameInfo;
-    json kernelsToLoad = {};
+    json baseKernels = {};
+    json missionKernels = {};
 
     if (mission != "" && searchKernels) {
-      kernelsToLoad["base"]["kernels"] = Inventory::search_for_kernelset("base", {"fk"});
-      kernelsToLoad[mission]["kernels"] = Inventory::search_for_kernelset(mission, {"fk"});
+      baseKernels = Inventory::search_for_kernelset("base", {"fk"});
+      missionKernels = Inventory::search_for_kernelset(mission, {"fk"});
     }
-    KernelSet kset(kernelsToLoad);
+    KernelSet baseKset(baseKernels);
+    KernelSet missionKset(missionKernels);
 
     checkNaifErrors();
     cidfrm_c(targetId, 128, &frameCode, frameName, &found);
