@@ -57,7 +57,7 @@ namespace SpiceQL {
 
           // cant contruct these in line for whatever reason 
           fc::BTreePair<double, size_t> p;
-          p.first = sstimes.second; 
+          p.first = sstimes.first; 
           p.second = index; 
           kernel_times->start_times.insert(p);
 

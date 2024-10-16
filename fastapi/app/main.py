@@ -55,8 +55,8 @@ async def getTargetStates(
     startEts: float | None = None,
     exposureDuration: float | None = None,
     numOfExposures: int | None = None,
-    ckQuality: str = "",
-    spkQuality: str = ""):
+    ckQuality: str = "smithed",
+    spkQuality: str = "smithed"):
     try:
         if ets is not None:
             if isinstance(ets, str):
@@ -84,7 +84,7 @@ async def getTargetOrientations(
     startEts: float | None = None,
     exposureDuration: float | None = None,
     numOfExposures: int | None = None,
-    ckQuality: str = ""):
+    ckQuality: str = "smithed"):
     try:
         if ets is not None:
             if isinstance(ets, str):
@@ -110,7 +110,6 @@ async def strSclkToEt(
     mission: str):
     try:
         result = pyspiceql.strSclkToEt(frameCode, sclk, mission, SEARCH_KERNELS_BOOL)
-        print("python result: ", result)
         body = ResultModel(result=result)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
@@ -234,7 +233,7 @@ async def frameTrace(
     et: float,
     initialFrame: int,
     mission: str,
-    ckQuality: str = ""):
+    ckQuality: str = "smithed"):
     try:
         result = pyspiceql.frameTrace(et, initialFrame, mission, ckQuality, SEARCH_KERNELS_BOOL)
         body = ResultModel(result=result)
@@ -249,7 +248,7 @@ async def extractExactCkTimes(
     observEnd: float,
     targetFrame: int,
     mission: str,
-    ckQuality: str = ""):
+    ckQuality: str = "smithed"):
     try:
         result = pyspiceql.extractExactCkTimes(observStart, observEnd, targetFrame, mission, ckQuality, SEARCH_KERNELS_BOOL)
         body = ResultModel(result=result)
