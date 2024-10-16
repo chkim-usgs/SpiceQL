@@ -222,17 +222,21 @@ namespace SpiceQL {
             found = true;
             time_indices = new TimeIndexedKernels();
             quality = (Kernel::Quality)i; 
-
-            ifstream start_times_ifs{cache/"start_time.bin", ios_base::in | ios_base::binary};
-            start_times_ifs >> time_indices->start_times;
-            ifstream stop_times_ifs{cache/"stop_time.bin", ios_base::in | ios_base::binary};
-            stop_times_ifs >> time_indices->stop_times;        
-            // indices are simple, store as a binary archive
-            std::ifstream ifs_index(cache/"index.bin");
-            cereal::BinaryInputArchive ia(ifs_index);
-            ia >> time_indices->index; 
+            try {
+              ifstream start_times_ifs{cache/"start_time.bin", ios_base::in | ios_base::binary};
+              start_times_ifs >> time_indices->start_times;
+              ifstream stop_times_ifs{cache/"stop_time.bin", ios_base::in | ios_base::binary};
+              stop_times_ifs >> time_indices->stop_times;        
+              // indices are simple, store as a binary archive
+              std::ifstream ifs_index(cache/"index.bin");
+              cereal::BinaryInputArchive ia(ifs_index);
+              ia >> time_indices->index; 
+            } catch (runtime_error &e) {
+              SPDLOG_TRACE("Couldn't find timedep/" + key+ ": " + e.what());
+              continue;
+            }
           }
-          if (enforce_quality) break; // only interate once if quality is enforced 
+          if (time_indices && time_indices->index.size() > 0) break; // only interate once if quality is enforced  
         }
 
         if (time_indices) { 
