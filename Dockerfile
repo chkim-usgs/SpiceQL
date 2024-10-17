@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install build-essential -y
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update
 RUN apt-get install nginx curl -y 
-COPY fastapi/config/nginx.conf /etc/nginx/nginx.con
+COPY fastapi/config/nginx.conf /etc/nginx/nginx.conf
 
 # CMD ["/bin/bash"]
 # RUN /bin/bash -c "source activate spiceql"
