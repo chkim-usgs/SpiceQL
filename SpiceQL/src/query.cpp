@@ -295,6 +295,14 @@ namespace SpiceQL {
   vector<string> getKernelsAsVector(json kernels) {
     SPDLOG_TRACE("geKernelsAsVector json: {}", kernels.dump());
 
+    // Remove ckQuality and spkQuality properties
+    if (kernels.contains("ckQuality")) {
+      kernels.erase("ckQuality");
+    }
+    if (kernels.contains("spkQuality")) {
+      kernels.erase("spkQuality");
+    }
+
     vector<json::json_pointer> pointers = findKeyInJson(kernels, "kernels");
     vector<string> kernelVect;
 
