@@ -46,8 +46,8 @@ TEST(UtilTests, testHashCollisions) {
 
 
 TEST(UtilTests, testGetKernelTimes) {  
-  fs::path temp_dir = fs::temp_directory_path();
-  fs::path ck_path = temp_dir / "testck.bsp";
+  // fs::path temp_dir = fs::temp_directory_path();
+  // fs::path ck_path = temp_dir / "testck.bsp";
   
   fs::path path = static_cast<fs::path>(getenv("SPICEROOT")) / "test_ck.bsp";
   fs::path lskPath = fs::path("data") / "naif0012.tls"; 
