@@ -449,19 +449,19 @@ TEST(PluralSuit, UnitTestGetTargetOrientations) {
 
 TEST_F(LroKernelSet, UnitTestGetTargetOrientation) {
   nlohmann::json testKernelJson;
-  testKernelJson["kernels"] = {{ckPath1}, {ckPath2}, {spkPath1}, {spkPath2}, {spkPath3}, {ikPath2}, {fkPath}, {sclkPath}};
+  testKernelJson["kernels"] = {{ckPath1}, {ckPath2}, {spkPath1}, {spkPath2}, {spkPath3}, {ikPath2}, {fkPath}, {sclkPath}, {lskPath}};
   KernelSet testSet(testKernelJson);
 
   double et = 110000000;
-  vector<double> resStates = getTargetOrientation(et, -85000, 1);
+  vector<double> resOrientation = getTargetOrientation(et, -85000, 1);
 
-  EXPECT_EQ(resStates.size(), 7);
-  EXPECT_NEAR(resStates[0], 1.0, 1e-14);
-  EXPECT_NEAR(resStates[1], 0.0, 1e-14);
-  EXPECT_NEAR(resStates[2], 0.0, 1e-14);
-  EXPECT_NEAR(resStates[3], 0.0, 1e-14);
-  EXPECT_NEAR(resStates[4], 0.0, 1e-14);
-  EXPECT_NEAR(resStates[5], 0.0, 1e-14);
-  EXPECT_NEAR(resStates[6], 0.0, 1e-14);
+  EXPECT_EQ(resOrientation.size(), 7);
+  EXPECT_NEAR(resOrientation[0], 1.0, 1e-14);
+  EXPECT_NEAR(resOrientation[1], 0.0, 1e-14);
+  EXPECT_NEAR(resOrientation[2], 0.0, 1e-14);
+  EXPECT_NEAR(resOrientation[3], 0.0, 1e-14);
+  EXPECT_NEAR(resOrientation[4], 0.0, 1e-14);
+  EXPECT_NEAR(resOrientation[5], 0.0, 1e-14);
+  EXPECT_NEAR(resOrientation[6], 0.0, 1e-14);
 }
 

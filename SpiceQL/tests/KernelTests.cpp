@@ -38,21 +38,18 @@ TEST_F(LroKernelSet, UnitTestStackedKernelConstructorDestructor) {
 
     // should match what spice counts
     ktotal_c("text", &nkernels);
-
-    // base LSK still loaded
-    EXPECT_EQ(nkernels, 2);
+    EXPECT_EQ(nkernels, 1);
   }
 
-  // SCLKs and LSKs are considered text kernels, so they should stay loaded
   ktotal_c("text", &nkernels);
-  EXPECT_EQ(nkernels, 1);
+  EXPECT_EQ(nkernels, 0);
 }
 
 
 TEST_F(LroKernelSet, UnitTestStackedKernelCopyConstructor) {
   int nkernels;
 
-  // This should create local kernels that get unfurnished when the stack is popped
+  // Same kernel that is furnished three times is still one kernel
   {
     Kernel k(lskPath);
     Kernel k2 = k;
@@ -60,14 +57,11 @@ TEST_F(LroKernelSet, UnitTestStackedKernelCopyConstructor) {
 
     // should match what spice counts
     ktotal_c("text", &nkernels);
-
-    // 5 total text kernels, but the lsk should have been loaded 3 times
-    EXPECT_EQ(nkernels, 4);
+    EXPECT_EQ(nkernels, 1);
   }
 
-  // SCLKs and LSKs are considered text kernels, so they should stay loaded
   ktotal_c("text", &nkernels);
-  EXPECT_EQ(nkernels, 1);
+  EXPECT_EQ(nkernels, 0);
 }
 
 
@@ -114,6 +108,10 @@ TEST_F(LroKernelSet, UnitTestStackedKernelSetConstructorDestructor) {
 
 
 TEST_F(LroKernelSet, UnitTestStrSclkToEt) {
+  nlohmann::json testKernelJson;
+  testKernelJson["kernels"] = {{ckPath1}, {ckPath2}, {spkPath1}, {spkPath2}, {spkPath3}, {ikPath2}, {fkPath}, {sclkPath}, {lskPath}};
+  KernelSet testSet(testKernelJson);
+  
   double et = strSclkToEt(-85, "1/281199081:48971", "lro");
 
   EXPECT_DOUBLE_EQ(et, 312778347.97478431);
@@ -121,6 +119,10 @@ TEST_F(LroKernelSet, UnitTestStrSclkToEt) {
 
 
 TEST_F(LroKernelSet, UnitTestDoubleSclkToEt) {
+  nlohmann::json testKernelJson;
+  testKernelJson["kernels"] = {{ckPath1}, {ckPath2}, {spkPath1}, {spkPath2}, {spkPath3}, {ikPath2}, {fkPath}, {sclkPath}, {lskPath}};
+  KernelSet testSet(testKernelJson);
+
   double et = doubleSclkToEt(-85, 922997380.174174, "lro");
 
   EXPECT_DOUBLE_EQ(et, 31593348.006268278);
