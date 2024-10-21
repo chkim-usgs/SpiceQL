@@ -208,92 +208,16 @@ namespace SpiceQL {
     return kernels;
   }
 
-
-  json searchEphemerisKernels(json kernels, std::vector<double> times, bool isContiguous, json cachedTimes)  {
-    json reducedKernels;
-
-    // Load any SCLKs in the config
-    vector<KernelSet> sclkKernels;
-    for (auto &p : findKeyInJson(kernels, "sclk", true)) {
-      kernels["sclk"] = getLatestKernels(kernels[p]);
-      SPDLOG_TRACE("sclks {}", kernels["sclk"].dump());
-      sclkKernels.push_back(KernelSet(kernels["sclk"]));
-    }
-
-    vector<json::json_pointer> ckpointers = findKeyInJson(kernels, "ck", true);
-    vector<json::json_pointer> spkpointers = findKeyInJson(kernels, "spk", true);
-    vector<json::json_pointer> pointers(ckpointers.size() + spkpointers.size());
-    merge(ckpointers.begin(), ckpointers.end(), spkpointers.begin(), spkpointers.end(), pointers.begin());
-
-    json newKernels = json::array();
-
-
-    // refine cks for every instrument/category
-    for (auto &p : pointers) {
-      json cks = kernels[p];
-      SPDLOG_TRACE("In searchEphemerisKernels: searching in {}", cks.dump());
-
-      if(cks.is_null() ) {
-        continue;
-      }
-      
-      for(auto qual: Kernel::QUALITIES) {
-        if(!cks.contains(qual)) {
-          continue;
-        }
-
-        json ckQual = cks[qual]["kernels"];
-        newKernels = json::array();
-
-        for(auto &subArr : ckQual) {
-          for (auto &kernel : subArr) {
-            json newKernelsSubArr = json::array();
-            vector<pair<double, double>> intervals;
-            if(cachedTimes.empty() || cachedTimes.is_null()) {
-              SPDLOG_TRACE("Getting times");
-              intervals = Memo::getTimeIntervals(kernel.get<string>());
-            } else {
-              SPDLOG_TRACE("Using cached times");
-              json arr = cachedTimes[kernel.get<string>()];
-              intervals = json2DArrayToDoublePair(arr);
-            }
-
-            for(auto &interval : intervals) {
-              auto isInRange = [&interval](double d) -> bool {return d >= interval.first && d <= interval.second;};
-
-              if (isContiguous && all_of(times.cbegin(), times.cend(), isInRange)) {
-                newKernelsSubArr.push_back(kernel);
-              }
-              else if (any_of(times.cbegin(), times.cend(), isInRange)) {  
-                newKernelsSubArr.push_back(kernel);
-              }
-            } // end of searching subarr
-            
-            SPDLOG_TRACE("kernel list found: {}", newKernelsSubArr.dump());
-            if (!newKernelsSubArr.empty()) {
-              newKernels.push_back(newKernelsSubArr);
-            }
-          } // end  of searching arr
-        } // end of iterating qualities
-        
-        SPDLOG_TRACE("newKernels {}", newKernels.dump());
-        reducedKernels[p/qual/"kernels"] = newKernels;
-        reducedKernels[p]["deps"] = kernels[p]["deps"];
-      }
-    }
-    kernels.merge_patch(reducedKernels);
-    return kernels;
-  }
-
-
-  json listMissionKernels(json conf) {
-    fs::path root = getDataDirectory();
-    return searchEphemerisKernels(root, conf);
-  }
-
-
   vector<string> getKernelsAsVector(json kernels) {
     SPDLOG_TRACE("geKernelsAsVector json: {}", kernels.dump());
+
+    // Remove ckQuality and spkQuality properties
+    if (kernels.contains("ckQuality")) {
+      kernels.erase("ckQuality");
+    }
+    if (kernels.contains("spkQuality")) {
+      kernels.erase("spkQuality");
+    }
 
     vector<json::json_pointer> pointers = findKeyInJson(kernels, "kernels");
     vector<string> kernelVect;
@@ -304,6 +228,19 @@ namespace SpiceQL {
         kernelVect.insert(kernelVect.end(), subarr.begin(), subarr.end());
       } 
     }
+    if (pointers.empty() && kernels.is_object()) { 
+      // Assume it's in the format {"sclk" : ["path1", "path2"], "ck" : ["path1"], ...}  
+      for (auto& [key, val] : kernels.items()) { 
+        SPDLOG_TRACE("Getting Kernels of Type: {}", key);
+        if(!val.empty()) { 
+           vector<string> ks = jsonArrayToVector(val);
+          for (auto &kernel : ks) { 
+            SPDLOG_TRACE("Adding: {}", kernel);
+            kernelVect.push_back(kernel);
+          } 
+        }
+      }
+    }
     else {
       for (auto & p : pointers) {
         if (!kernels[p].empty()) {
@@ -313,7 +250,7 @@ namespace SpiceQL {
           }
         }
         else {
-          SPDLOG_WARN("Unable to furnish {}, with kernels {}", p.to_string(), kernels[p].dump());
+          SPDLOG_WARN("Unable to get {}, with kernels {}", p.to_string(), kernels[p].dump());
         }
       }    
     }
@@ -346,107 +283,5 @@ namespace SpiceQL {
     }    
 
     return kset;
-  }
-
-
-  json searchAndRefineKernels(string mission, vector<double> times, string ckQuality, string spkQuality, vector<string> kernels) {
-    auto start = high_resolution_clock::now();
-    Config config;
-    json missionKernels;
-    Kernel::Quality ckQualityEnum;
-    Kernel::Quality spkQualityEnum;
-
-    try {
-      ckQualityEnum = Kernel::translateQuality(ckQuality);
-    }
-    catch (invalid_argument &e) {
-      SPDLOG_WARN("{}. Setting ckQuality to RECONSTRUCTED", e.what());
-      ckQuality = "reconstructed";
-      ckQualityEnum = Kernel::translateQuality(ckQuality);
-    }
-
-    try {
-      spkQualityEnum = Kernel::translateQuality(spkQuality);
-    }
-    catch (invalid_argument &e) {
-      SPDLOG_WARN("{}. Setting spkQuality to RECONSTRUCTED", e.what());
-      spkQuality = "reconstructed";
-      spkQualityEnum = Kernel::translateQuality(spkQuality);
-    }
-
-    if (config.contains(mission)) {
-      SPDLOG_TRACE("Found {} in config, getting only {} kernels.", mission, mission);
-      missionKernels = config.get(mission);
-    }
-    else {
-      throw invalid_argument("Couldn't find " + mission + " in config explicitly, please request a mission from the config [" + getMissionKeys(config.globalConf()) + "]");
-    }
-    // If nadir is enabled we can probably load a smaller set of kernels?
-    json refinedMissionKernels = {};
-    json refinedBaseKernels = {};
-    json baseKernels = config.get("base");
-    bool timeDepKernelsRequested = false;
-
-    for (string kernel : kernels) {
-      try {
-        Kernel::translateType(kernel);
-        if (kernel == "ck" || kernel == "spk") {
-          timeDepKernelsRequested = true;
-        }
-        if (missionKernels.contains(kernel)) {
-          refinedMissionKernels[kernel] = missionKernels[kernel];
-        }
-        if (baseKernels.contains(kernel)) {
-          refinedBaseKernels[kernel] = baseKernels[kernel];
-        }
-      }
-      catch (invalid_argument &e) {
-        SPDLOG_WARN(e.what());
-      }
-    }
-    // Refines times based kernels (cks, spks, and sclks)
-    if (timeDepKernelsRequested) {
-      json cachedTimes = json::parse(Memo::globTimeIntervals(mission));
-      
-      refinedMissionKernels = searchEphemerisKernels(refinedMissionKernels, times, true, cachedTimes);
-
-      if (refinedMissionKernels.contains("ck")) {
-        for (int i = (int) ckQualityEnum; (int) ckQualityEnum != 0; i--) {
-          string ckQual = Kernel::translateQuality(Kernel::Quality(i));
-          if (refinedMissionKernels["ck"].contains(ckQual)) {
-            if (size(refinedMissionKernels["ck"][ckQual]["kernels"]) != 0) {
-              refinedMissionKernels["ck"] = refinedMissionKernels["ck"][ckQual];
-              break;
-            }
-          }
-        }
-      }
-
-      if (refinedMissionKernels.contains("spk")) {
-        for (int i = (int) spkQualityEnum; (int) spkQualityEnum != 0; i--) {
-          string spkQual = Kernel::translateQuality(Kernel::Quality(i));
-          if (refinedMissionKernels["spk"].contains(spkQual)) {
-            if (size(refinedMissionKernels["spk"][spkQual]["kernels"]) != 0) {
-              refinedMissionKernels["spk"] = refinedMissionKernels["spk"][spkQual];
-              break;
-            }
-          }
-        }
-      }
-    }
-    // Gets the latest kernel of every type
-    refinedMissionKernels = getLatestKernels(refinedMissionKernels);
-
-    refinedBaseKernels = getLatestKernels(refinedBaseKernels);
-    // SPDLOG_TRACE("Base Kernels found: {}", baseKernels.dump());
-    SPDLOG_TRACE("Kernels found: {}", refinedMissionKernels.dump());
-    json finalKernels = {};
-    finalKernels["base"] = refinedBaseKernels;
-    finalKernels[mission] = refinedMissionKernels;
-    auto stop = high_resolution_clock::now();
-    auto duration = duration_cast<microseconds>(stop - start);
-
-    SPDLOG_INFO("Time in microseconds to get filtered kernel list: {}", duration.count());
-    return finalKernels;
   }
 }

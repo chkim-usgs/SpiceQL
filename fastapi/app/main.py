@@ -31,12 +31,7 @@ class ResponseModel(BaseModel):
 # Create FastAPI instance
 app = FastAPI()
 
-# General endpoints
-@app.get("/", include_in_schema=False)
-async def root():
-    return RedirectResponse(url="/docs")
-
-@app.get("/healthCheck")
+@app.get("/")
 async def message():
     try: 
       data_dir_exists = os.path.exists(pyspiceql.getDataDirectory()) 
@@ -60,8 +55,8 @@ async def getTargetStates(
     startEts: float | None = None,
     exposureDuration: float | None = None,
     numOfExposures: int | None = None,
-    ckQuality: str = "",
-    spkQuality: str = ""):
+    ckQuality: str = "smithed",
+    spkQuality: str = "smithed"):
     try:
         if ets is not None:
             if isinstance(ets, str):
@@ -89,7 +84,7 @@ async def getTargetOrientations(
     startEts: float | None = None,
     exposureDuration: float | None = None,
     numOfExposures: int | None = None,
-    ckQuality: str = ""):
+    ckQuality: str = "smithed"):
     try:
         if ets is not None:
             if isinstance(ets, str):
@@ -120,6 +115,7 @@ async def strSclkToEt(
     except Exception as e:
         body = ErrorModel(error=str(e))
         return ResponseModel(statusCode=500, body=body)
+
 
 @app.get("/doubleSclkToEt")
 async def doubleSclkToEt(
@@ -237,7 +233,7 @@ async def frameTrace(
     et: float,
     initialFrame: int,
     mission: str,
-    ckQuality: str = ""):
+    ckQuality: str = "smithed"):
     try:
         result = pyspiceql.frameTrace(et, initialFrame, mission, ckQuality, SEARCH_KERNELS_BOOL)
         body = ResultModel(result=result)
@@ -252,7 +248,7 @@ async def extractExactCkTimes(
     observEnd: float,
     targetFrame: int,
     mission: str,
-    ckQuality: str = ""):
+    ckQuality: str = "smithed"):
     try:
         result = pyspiceql.extractExactCkTimes(observStart, observEnd, targetFrame, mission, ckQuality, SEARCH_KERNELS_BOOL)
         body = ResultModel(result=result)

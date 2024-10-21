@@ -26,12 +26,9 @@
 #include <cereal/types/utility.hpp>
 #include <cereal/archives/json.hpp>
 
-#include <sw/redis++/redis++.h>
-
 #include "memoized_functions.h"
 
 #define CACHED(cache, func, ...) cache(#func, func, __VA_ARGS__)
-
 
 namespace SpiceQL {
 namespace Memo {
@@ -98,20 +95,6 @@ namespace Memo {
     }
 
 
-    inline bool isRedisEnabled() { 
-        const char* env_redis_enabled = getenv("SPICEQL_ENABLE_REDIS");
-        bool is_redis_enabled = !(env_redis_enabled == NULL);
-
-        if (env_redis_enabled != NULL) {
-            SPDLOG_TRACE("$SPICEQL_ENABLE_REDIS {}", env_redis_enabled);
-            std::istringstream(toLower(std::string(env_redis_enabled))) >> std::boolalpha >> is_redis_enabled;
-        }
-
-        SPDLOG_TRACE("Is Redis enabled? {}", is_redis_enabled);
-        return is_redis_enabled;
-    }
-
-
     inline std::string getCacheDir() { 
         static std::string  CACHE_DIRECTORY = "";
 
@@ -143,38 +126,6 @@ namespace Memo {
         return CACHE_DIRECTORY;
     }
 
-
-    inline sw::redis::RedisCluster* getRedisConnection() { 
-        static std::string REDIS_URI = "";
-        static sw::redis::RedisCluster *cluster = NULL; 
-
-        if(!Memo::isRedisEnabled()) {
-          throw std::runtime_error("Redis is not enabled, set $SPICEQL_ENABLE_REDIS=true to enable redis support");
-        }
-    
-        if (REDIS_URI == "") {
-          const char* env_host = getenv("SPICEQL_REDIS_HOST");
-          const char* env_port = getenv("SPICEQL_REDIS_PORT");
-          const char* env_db = getenv("SPICEQL_REDIS_DB");
-    
-          // get defaults 
-          std::string host = env_host == NULL ? std::string("localhost") : std::string(env_host);
-          std::string port = env_port == NULL ? std::string("6379") : std::string(env_port);
-          std::string db = env_db == NULL ? std::string("0") : std::string(env_db);
-    
-          REDIS_URI = fmt::format("redis://{}:{}/{}", host, port, db);
-          SPDLOG_DEBUG("Redis URI: {}", REDIS_URI);
-        }
-    
-        SPDLOG_TRACE("Redis URI: {}", REDIS_URI); 
-        
-        if(cluster == NULL) { 
-            cluster = new sw::redis::RedisCluster(REDIS_URI);
-        }
-
-        return cluster; 
-    }
-
     class Cache {
        public:
         // if cache is older than this directory, then the cache is reloaded
@@ -204,77 +155,7 @@ namespace Memo {
         auto operator()(const std::string& descr, std::size_t seed, const Func& f, Params&&... params) -> decltype(f(params...))const {
             static const char* TIME_FORMAT="%b %d %Y %H:%M:%S";
 
-            if (!isRedisEnabled()) { 
-                // use disk cache instead 
-                return use_disk_cache(descr, seed, f, params...);
-            }
-
-            typedef decltype(f(params...)) retval_t;
-            std::string name = descr + "-" + std::to_string(seed);
-
-            sw::redis::RedisCluster *cluster = getRedisConnection();
-
-            SPDLOG_TRACE("Cache Redis Key: {}", name);
-            std::unordered_map<std::string, std::string> rdata;
-            
-            try {
-                cluster->hgetall(name, std::inserter(rdata, rdata.begin()));
-            } catch (std::exception &e) { 
-                SPDLOG_DEBUG("hmget exception: {}", e.what());
-                // key not found or connection error, leave empty
-            }
-            
-            SPDLOG_TRACE("Does key ({}) exists in redis? {}", name, !rdata.empty());
-
-            if(!rdata.empty()) {
-
-                // get last modified time
-                time_t key_create_time = time_from_str(rdata.at("modtime"));
-
-                if(!has_cache_expired(key_create_time, m_dependants)) {
-                    SPDLOG_TRACE("Cached access of {}", name);
-
-                    std::istringstream is(rdata.at("return"));
-                    retval_t ret;
-
-                    /** Put in a stack to ensure it flushes before returning **/ {
-                        cereal::PortableBinaryInputArchive ia(is);
-                        ia(ret);
-                    }
-                    return ret;
-                }
-                else { 
-                    // delete and reload cache, we wont delete the key and simply override it 
-                    SPDLOG_TRACE("Dependents are newer, {} has expired", name);
-                }
-            }
-
-            // if dependant doesn't exist, treat it as a cache miss. Function might naturally fail.
-            
-            SPDLOG_TRACE("Non-cached access, creating cache {}", name);
-            retval_t ret = f(std::forward<Params>(params)...);
-            std::ostringstream oss;
-            /** Put in a stack to ensure it flushes before returning **/ {
-                cereal::PortableBinaryOutputArchive oa(oss);
-                oa(ret);
-            }
-
-            auto t = std::time(nullptr);
-            auto tm = *std::localtime(&t);
-            std::ostringstream oss_time;
-            
-            oss_time << std::put_time(&tm, TIME_FORMAT);
-
-            // push string to redis 
-            // std::unordered_map<std::string, std::string> to Redis HASH.
-            std::unordered_map<std::string, std::string> output_map = {
-                {"return", oss.str()},
-                {"modtime", oss_time.str()}
-            };
-
-            cluster->hset(name, output_map.begin(), output_map.end());
-
-            return ret;
+            return use_disk_cache(descr, seed, f, params...);
         }
 
         // TODO: this is jank, make it less jank

@@ -13,6 +13,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "inventory.h"
 #include "spice_types.h"
 #include "query.h"
 #include "utils.h"
@@ -90,7 +91,7 @@ namespace SpiceQL {
     json kernelsToLoad = {};
 
     if (mission != "" && searchKernels) {
-      kernelsToLoad = loadTranslationKernels(mission);
+      kernelsToLoad = Inventory::search_for_kernelset(mission, {"fk"});
     } 
     KernelSet kset(kernelsToLoad);
 
@@ -117,7 +118,7 @@ namespace SpiceQL {
     json kernelsToLoad = {};
 
     if (mission != "" && searchKernels){
-      kernelsToLoad = loadTranslationKernels(mission);
+      kernelsToLoad = Inventory::search_for_kernelset(mission, {"fk"});
     }
     KernelSet kset(kernelsToLoad);
 
@@ -147,7 +148,7 @@ namespace SpiceQL {
 
     if (mission != "" && searchKernels) {
       // Load only the FKs
-      kernelsToLoad = loadTranslationKernels(mission, true, false, false);
+      kernelsToLoad = Inventory::search_for_kernelset(mission, {"fk"});
     }
     KernelSet kset(kernelsToLoad);
 
@@ -165,18 +166,18 @@ namespace SpiceQL {
 
   Kernel::Kernel(string path) {
     this->path = path;
-    KernelPool::getInstance().load(path, true);
+    load(path, true);
   }
 
 
-  Kernel::Kernel(Kernel &other) {
-    KernelPool::getInstance().load(other.path);
-    this->path = other.path;
-  }
+  // Kernel::Kernel(Kernel &other) {
+  //   load(other.path);
+  //   this->path = other.path;
+  // }
 
 
   Kernel::~Kernel() {
-    KernelPool::getInstance().unload(this->path);
+    unload(this->path);
   }
 
 
@@ -207,12 +208,12 @@ namespace SpiceQL {
 
       // get lsk kernel
       if (searchKernels) {
-       lsks = conf.getLatest("lsk");
+       lsks = Inventory::search_for_kernelset("base", {"lsk"});
       }
 
       KernelSet lsk(lsks);
 
-      SpiceChar utc_spice[100]; 
+      SpiceChar utc_spice[100];
       checkNaifErrors();
       et2utc_c(et, format.c_str(), precision, 100, utc_spice);
       checkNaifErrors();
@@ -221,14 +222,19 @@ namespace SpiceQL {
   }
 
   double strSclkToEt(int frameCode, string sclk, string mission, bool searchKernels) {
-      Config missionConf;
+      SPDLOG_TRACE("calling strSclkToEt({}, {}, {}, {})", frameCode, sclk, mission, searchKernels);
       json sclks;
-
+      json lsks;
       if (searchKernels) {
-        sclks = loadSelectKernels("sclk", mission);
+        lsks = Inventory::search_for_kernelset("base", {"lsk"}); 
+        sclks = Inventory::search_for_kernelset(mission, {"fk", "sclk"});
       }
 
       KernelSet sclkSet(sclks);
+      KernelSet lskSet(lsks);
+      
+      // we want the platforms code, if they passs in an instrument code (e.g. -85600), truncate it to (-85)
+      frameCode = (abs(frameCode / 1000) > 0) ? frameCode/1000 : frameCode; 
 
       SpiceDouble et;
       checkNaifErrors();
@@ -244,10 +250,14 @@ namespace SpiceQL {
       json sclks;
 
       if (searchKernels) {
-        sclks = loadSelectKernels("sclk", mission);
+        // sclks = loadSelectKernels("sclk", mission);
+        sclks = Inventory::search_for_kernelset(mission, {"lsk", "fk", "sclk"});
       }
 
       KernelSet sclkSet(sclks);
+      
+      // we want the platforms code, if they passs in an instrument code (e.g. -85600), truncate it to (-85)
+      frameCode = (abs(frameCode / 1000) > 0) ? frameCode/1000 : frameCode; 
 
       SpiceDouble et;
       checkNaifErrors();
@@ -264,7 +274,7 @@ namespace SpiceQL {
       json sclks;
 
       if (searchKernels) {
-        sclks = loadSelectKernels("sclk", mission);
+        sclks = Inventory::search_for_kernelset(mission, {"lsk", "fk", "sclk"});
       }
 
       KernelSet sclkSet(sclks);
@@ -282,7 +292,7 @@ namespace SpiceQL {
     json translationKernels = {};
 
     if (mission != "" && searchKernels) {
-      translationKernels = loadTranslationKernels(mission);
+      translationKernels = Inventory::search_for_kernelset(mission, {"iak", "fk", "ik"});
     }
 
     KernelSet kset(translationKernels);
@@ -292,13 +302,15 @@ namespace SpiceQL {
 
 
   json findTargetKeywords(string key, string mission, bool searchKernels) {
-    json kernelsToLoad = {};
+    json baseKernels = {};
+    json missionKernels = {};
 
     if (mission != "" && searchKernels) {
-      kernelsToLoad["base"] = loadSelectKernels("pck", "base");
-      kernelsToLoad[mission] = loadSelectKernels("pck", mission);
+      baseKernels = Inventory::search_for_kernelset("base", {"pck"});
+      missionKernels = Inventory::search_for_kernelset(mission, {"pck"});
     }
-    KernelSet kset(kernelsToLoad);
+    KernelSet baseKset(baseKernels);
+    KernelSet missionKset(missionKernels);
     return findKeywords(key);
   }
 
@@ -309,13 +321,15 @@ namespace SpiceQL {
     SpiceBoolean found;
 
     json frameInfo;
-    json kernelsToLoad = {};
+    json baseKernels = {};
+    json missionKernels = {};
 
     if (mission != "" && searchKernels) {
-      kernelsToLoad["base"] = loadSelectKernels("pck", "base");
-      kernelsToLoad[mission] = loadSelectKernels("pck", mission);
+      baseKernels = Inventory::search_for_kernelset("base", {"fk"});
+      missionKernels = Inventory::search_for_kernelset(mission, {"fk"});
     }
-    KernelSet kset(kernelsToLoad);
+    KernelSet baseKset(baseKernels);
+    KernelSet missionKset(missionKernels);
 
     checkNaifErrors();
     cidfrm_c(targetId, 128, &frameCode, frameName, &found);
@@ -331,150 +345,18 @@ namespace SpiceQL {
     return frameInfo;
   }
 
-
-  int KernelPool::load(string path, bool force_refurnsh) {
-    SPDLOG_DEBUG("Furnishing {}, force refurnish? {}.", path, force_refurnsh);
-
-    int refCount; 
-
-    auto it = refCounts.find(path);
-
-    if (it != refCounts.end()) {
-      SPDLOG_TRACE("{} already furnished.", path);
-
-      // it's been furnished before, increment ref count
-      it->second += 1;
-      refCount = it->second; 
- 
-      if (force_refurnsh) {
-        checkNaifErrors();
-        furnsh_c(path.c_str());
-        checkNaifErrors();
-      }
-    }
-    else { 
-      refCount = 1;  
-      // load the kernel and register in onto the kernel map 
-      checkNaifErrors();
-      furnsh_c(path.c_str());
-      checkNaifErrors();
-      refCounts.emplace(path, 1);
-    }
-
-
-    SPDLOG_TRACE("refcout of {}: {}", path, refCount);
-    return refCount;
-  }
-
-
-  int KernelPool::unload(string path) {
-    try { 
-      int &refcount = refCounts.at(path);
-      
-      // if the map contains the last copy of the kernel, delete it
-      if (refcount == 1) {
-        // unfurnsh the kernel
-        checkNaifErrors();
-        unload_c(path.c_str());
-        checkNaifErrors();
-        
-        refCounts.erase(path);
-        return 0;
-      }
-      else {
-        checkNaifErrors();
-        unload_c(path.c_str());
-        checkNaifErrors();
-        
-        refcount--;
-        
-        return refcount;
-      }
-    }
-    catch(out_of_range &e) {
-      throw out_of_range(path + " is not a kernel that has been loaded."); 
-    }
-  }
-
-
-  unsigned int KernelPool::getRefCount(std::string key) {
-    try {
-      return refCounts.at(key);
-    } catch(out_of_range &e) {
-      return 0;
-    }
-  }
-
-
-  unordered_map<string, int> KernelPool::getRefCounts() {
-    return refCounts;
-  }
-
-
-  KernelPool &KernelPool::getInstance() {
-    static KernelPool pool;
-    return pool;
-  }
-
-
-  KernelPool::KernelPool() : refCounts() { 
-    loadLeapSecondKernel();
-
+  void load(string path, bool force_refurnsh) {
+    SPDLOG_DEBUG("Furnishing {}, force refurnish? {}.", path, force_refurnsh); 
     checkNaifErrors();
-    // create aliases for spacecrafts 
-    boddef_c("mess", -236); // NAIF uses MESSENGER, we use mess for short
+    furnsh_c(path.c_str());
     checkNaifErrors();
-  
   }
 
-
-  vector<string> KernelPool::getLoadedKernels() {
-    vector<string> res;
-
-    for( const auto& [key, value] : refCounts ) {
-      res.emplace_back(key);
-    }
-    return res;
+  void unload(string path) {
+    checkNaifErrors();
+    unload_c(path.c_str());
+    checkNaifErrors();
   }
-
-  void KernelPool::loadClockKernels() { 
-    json clocks;
-
-    // if data dir not set, should raise an exception 
-    fs::path dataDir = getDataDirectory();
-
-    vector<json> confs = getAvailableConfigs();
-    // get SCLKs
-    for(auto &j : confs) {
-      vector<json::json_pointer> p = findKeyInJson(j, "sclk", true);
-      
-      if (!p.empty()) {
-        json sclks = j[p.at(0)];
-        clocks[p.at(0)] = sclks;
-      }
-    }
-  
-    clocks = listMissionKernels(dataDir, clocks);
-    clocks = getLatestKernels(clocks);
-
-    vector<json::json_pointer> kpointers = findKeyInJson(clocks, "kernels", true);
-    for (auto &p : kpointers) {
-        json sclks = clocks[p];
-        
-        for (auto &e : sclks) { 
-          load(e.get<string>());
-        }
-    }
-  }
-
-
-  void KernelPool::loadLeapSecondKernel() {
-    // get the distribution's LSK
-    fs::path dbPath = getConfigDirectory();
-    string lskPath = dbPath / "kernels" / "naif0011.tls";
-    load(lskPath);
-  }
-
 
   KernelSet::KernelSet(json kernels) {
     load(kernels);
@@ -483,16 +365,29 @@ namespace SpiceQL {
   void KernelSet::load(json kernels) { 
     SPDLOG_TRACE("Creating Kernelset: {}", kernels.dump());
     this->m_kernels.merge_patch(kernels);
-
+    
     vector<string> kv = getKernelsAsVector(kernels);
-  
-    vector<SharedKernel> res;
+
     for (auto &k : kv) {
       SPDLOG_TRACE("Creating shared kernel {}", k);
-      SharedKernel sk(new Kernel(k));
-      res.emplace_back(sk);
+      if (!fs::exists(k)) { 
+        throw runtime_error("Kernel " + k + " does not exist");
+      }
+      
+      try { 
+        Kernel *kp = new Kernel(k);
+        m_loadedKernels.emplace_back(kp);
+      } catch (exception &e) { 
+        throw runtime_error("something went wrong: " + string(e.what()));
+      }
     }
-    loadedKernels.insert(loadedKernels.end(), res.begin(), res.end());
+  }
+
+  KernelSet::~KernelSet() { 
+    for(auto p : m_loadedKernels) { 
+      delete p;
+    }
+    m_loadedKernels.clear();
   }
 
 } 

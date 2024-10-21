@@ -46,9 +46,7 @@ option (SPICEQL_BUILD_LIB "Build the SpiceQL Library" ON)
 if(SPICEQL_BUILD_LIB)
 
   set(JSON_BuildTests OFF CACHE INTERNAL "")
-  set(REDIS_PLUS_PLUS_BUILD_TEST OFF CACHE INTERNAL "")
 
-  add_subdirectory("submodules/redis-plus-plus")
   add_subdirectory("submodules/gularkfilesystem")
   add_subdirectory("submodules/json")
   
@@ -56,7 +54,7 @@ if(SPICEQL_BUILD_LIB)
   find_package(fmt REQUIRED)
   find_package(cereal REQUIRED)
   find_package(spdlog REQUIRED)
-  find_package(hiredis REQUIRED)
+  find_package(HighFive REQUIRED)
 
   set(SPICEQL_INSTALL_INCLUDE_DIR "include/SpiceQL")
   set(SPICEQL_SRC_FILES   ${CMAKE_CURRENT_SOURCE_DIR}/SpiceQL/src/spiceql.cpp 
@@ -67,7 +65,7 @@ if(SPICEQL_BUILD_LIB)
                           ${CMAKE_CURRENT_SOURCE_DIR}/SpiceQL/src/memoized_functions.cpp
                           ${CMAKE_CURRENT_SOURCE_DIR}/SpiceQL/src/config.cpp
                           ${CMAKE_CURRENT_SOURCE_DIR}/SpiceQL/src/inventory.cpp
-                          ${CMAKE_CURRENT_SOURCE_DIR}/SpiceQL/src/database.cpp)
+                          ${CMAKE_CURRENT_SOURCE_DIR}/SpiceQL/src/inventoryimpl.cpp)
 
 
   set(SPICEQL_HEADER_FILES ${SPICEQL_BUILD_INCLUDE_DIR}/spiceql.h
@@ -78,7 +76,7 @@ if(SPICEQL_BUILD_LIB)
                            ${SPICEQL_BUILD_INCLUDE_DIR}/query.h
                            ${SPICEQL_BUILD_INCLUDE_DIR}/config.h
                            ${SPICEQL_BUILD_INCLUDE_DIR}/inventory.h
-                           ${SPICEQL_BUILD_INCLUDE_DIR}/database.h)
+                           ${SPICEQL_BUILD_INCLUDE_DIR}/inventoryimpl.h)
 
   set(SPICEQL_PRIVATE_HEADER_FILES ${SPICEQL_BUILD_INCLUDE_DIR}/memo.h)
 
@@ -121,14 +119,12 @@ if(SPICEQL_BUILD_LIB)
   target_compile_definitions(SpiceQL PRIVATE SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE 
                                      PUBLIC -D_SOURCE_PREFIX="${CMAKE_CURRENT_SOURCE_DIR}")
   
-  message(STATUS "redis++ inc: "  ${HIREDIS_INCLUDE_DIRS})
-  target_include_directories(SpiceQL
+target_include_directories(SpiceQL
                             PUBLIC
                             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SpiceQL/include>
                             $<INSTALL_INTERFACE:include>
                             PRIVATE
                             ${CMAKE_CURRENT_SOURCE_DIR}/submodules/BTree/include/
-                            ${CMAKE_CURRENT_SOURCE_DIR}/submodules/redis-plus-plus/src/
                             cereal
                             )
 
@@ -137,9 +133,9 @@ if(SPICEQL_BUILD_LIB)
                         fmt::fmt-header-only
                         nlohmann_json::nlohmann_json
                         PRIVATE
-                        redis++ 
                         cspice
                         spdlog::spdlog_header_only
+                        HighFive
                         )
    
   install(TARGETS SpiceQL LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})

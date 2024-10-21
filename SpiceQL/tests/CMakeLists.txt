@@ -31,17 +31,16 @@ target_compile_definitions(runSpiceQLTests PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEV
 target_link_libraries(runSpiceQLTests
                       PRIVATE
                       SpiceQL
-                      redis++
                       cspice
                       gtest
                       gmock
                       Threads::Threads
                       spdlog::spdlog_header_only
+                      HighFive
                       )
 
 
-target_include_directories(runSpiceQLTests PRIVATE ${CMAKE_SOURCE_DIR}/submodules/redis-plus-plus/src/ 
-                                                   ${CMAKE_SOURCE_DIR}/submodules/hippomocks/ 
+target_include_directories(runSpiceQLTests PRIVATE ${CMAKE_SOURCE_DIR}/submodules/hippomocks/ 
                                                    ${CMAKE_SOURCE_DIR}/submodules/BTree/include/)
 
 gtest_discover_tests(runSpiceQLTests WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/SpiceQL/tests/)

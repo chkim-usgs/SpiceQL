@@ -13,11 +13,6 @@ using namespace std;
 using json = nlohmann::json;
 using namespace SpiceQL;
 
-TEST_F(TestConfig, FunctionalTestConfigConstruct) {
-  json megaConfig = testConfig.globalConf();
-
-  EXPECT_EQ(megaConfig.size(), 71);
-}
 
 TEST_F(TestConfig, FunctionalTestConfigEval) {
   fs::path dbPath = getMissionConfigFile("clem1");

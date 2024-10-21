@@ -5,7 +5,7 @@
                 "kernels": ["lo[0-9]{1}_photo_support_ME.bsp"]
             }
         },
-        "pck" : { 
+        "pck" : {
             "deps" : ["/base/pck"]
         },
         "lsk": {

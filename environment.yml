@@ -10,6 +10,7 @@ dependencies:
   - cspice 
   - cxx-compiler
   - doxygen
+  - highfive
   - fmt==9.1.0
   - libhiredis
   - ninja

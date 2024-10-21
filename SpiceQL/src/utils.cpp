@@ -29,6 +29,7 @@
 #include "query.h"
 #include "spice_types.h"
 #include "utils.h"
+#include "inventory.h"
 
 using json = nlohmann::json;
 using namespace std;
@@ -207,13 +208,18 @@ namespace SpiceQL {
     }
 
     json ephemKernels = {};
+    json lskKernels = {};
 
     if (searchKernels) {
-      ephemKernels = searchAndRefineKernels(mission, {ets.front(), ets.back()}, ckQuality, spkQuality, {"sclk", "ck", "spk", "pck", "tspk"});
+      ephemKernels = Inventory::search_for_kernelset(mission, {"sclk", "ck", "spk", "pck", "tspk"}, ets.front(), ets.back(), ckQuality, spkQuality);
+      lskKernels = Inventory::search_for_kernelset("base", {"lsk"});
+      SPDLOG_DEBUG("LSK Kernels : {}", lskKernels.dump(4));
+      SPDLOG_DEBUG("{} Kernels : {}", mission, ephemKernels.dump(4)); 
     }
 
     auto start = high_resolution_clock::now();
     KernelSet ephemSet(ephemKernels);
+    KernelSet lskSet(lskKernels);
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<microseconds>(stop - start);
     SPDLOG_INFO("Time in microseconds to furnish kernel sets: {}", duration.count());
@@ -236,16 +242,20 @@ namespace SpiceQL {
 
   vector<double> extractExactCkTimes(double observStart, double observEnd, int targetFrame, string mission, string ckQuality, bool searchKernels) {
     SPDLOG_TRACE("Calling extractExactCkTimes with {}, {}, {}, {}, {}, {}", observStart, observEnd, targetFrame, mission, ckQuality, searchKernels);
-    Config config;
+    // Config config;
     json missionJson;
 
     json ephemKernels = {};
+    json lskKernels = {};
+
 
     if (searchKernels) {
-      ephemKernels = searchAndRefineKernels(mission, {observStart, observEnd}, ckQuality, "na", {"ck", "sclk"});
+      ephemKernels = Inventory::search_for_kernelset(mission, {"ck", "sclk"}, observStart, observEnd, ckQuality, "na");
+      lskKernels = Inventory::search_for_kernelset("base", {"lsk"});
     }
 
     KernelSet ephemSet(ephemKernels);
+    KernelSet lskSet(lskKernels);
 
     int count = 0;
 
@@ -436,21 +446,24 @@ namespace SpiceQL {
 
   vector<vector<double>> getTargetOrientations(vector<double> ets, int toFrame, int refFrame, string mission, string ckQuality, bool searchKernels) {
     SPDLOG_TRACE("Calling getTargetOrientations with {}, {}, {}, {}, {}, {}", ets.size(), toFrame, refFrame, mission, ckQuality, searchKernels);
-    Config config;
-    json missionJson;
+    // Config config;
+    // json missionJson;
 
     if (ets.size() < 1) {
       throw invalid_argument("No ephemeris times given.");
     }
 
     json ephemKernels = {};
+    json lskKernels = {};
 
     if (searchKernels) {
-      ephemKernels = searchAndRefineKernels(mission, {ets.front(), ets.back()}, ckQuality, "na", {"sclk", "ck", "pck", "fk", "tspk"});
+      ephemKernels = Inventory::search_for_kernelset(mission, {"sclk", "ck", "pck", "fk", "tspk"}, ets.front(), ets.back(), ckQuality, "na");
+      lskKernels = Inventory::search_for_kernelset("base", {"lsk"});
     }
 
     auto start = high_resolution_clock::now();
     KernelSet ephemSet(ephemKernels);
+    KernelSet lskSet(lskKernels);
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<microseconds>(stop - start);
     SPDLOG_INFO("Time in microseconds to furnish kernel sets: {}", duration.count());
@@ -472,15 +485,18 @@ namespace SpiceQL {
 
   vector<vector<int>> frameTrace(double et, int initialFrame, string mission, string ckQuality, bool searchKernels) {
     checkNaifErrors();
-    Config config;
-    json missionJson;
+    // Config config;
+    // json missionJson;
     json ephemKernels;
+    json lskKernels;
 
     if (searchKernels) {
-      ephemKernels = searchAndRefineKernels(mission, {et}, ckQuality, "na", {"sclk", "ck", "pck", "fk", "tspk"});
+      ephemKernels = Inventory::search_for_kernelset(mission, {"sclk", "ck", "pck", "fk", "tspk"}, et, et, ckQuality, "na");
+      lskKernels = Inventory::search_for_kernelset("base", {"lsk"});
     }
 
     KernelSet ephemSet(ephemKernels);
+    KernelSet lskSet(lskKernels);
 
     checkNaifErrors();
     // The code for this method was extracted from the Naif routine rotget written by N.J. Bachman &
@@ -1354,7 +1370,7 @@ namespace SpiceQL {
       errprt_c("SET", sizeof(printAct), printAct);     // ... and print nothing
       initialized = true;
     }
-
+    
     if(!failed_c()) return true;
 
     // This method has been documented with the information provided
@@ -1391,7 +1407,6 @@ namespace SpiceQL {
     }
     
     errMsg += "Error Occured:" + string(naifShort) + " " + string(naifLong);
-
     throw runtime_error(errMsg);
   }
 
