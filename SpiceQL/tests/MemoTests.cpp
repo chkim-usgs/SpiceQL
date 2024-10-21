@@ -62,6 +62,7 @@ TEST(UtilTests, testGetKernelTimes) {
 
   writeCk(path, orientations, times, bodyCode, referenceFrame, segmentId, sclkPath, lskPath, av);
 
+  Kernel lsk(lskPath);
   Kernel sclk(sclkPath);
   std::vector<std::pair<double, double>> v_nonmemo = getTimeIntervals(path);
 

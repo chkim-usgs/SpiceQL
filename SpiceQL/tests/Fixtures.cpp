@@ -4,6 +4,7 @@
 #include <HippoMocks/hippomocks.h>
 
 #include <fmt/format.h>
+#include <spdlog/spdlog.h>
 
 #include <exception>
 #include <fstream>
@@ -14,6 +15,7 @@
 #include "utils.h"
 #include "io.h"
 #include "query.h"
+#include "inventory.h"
 
 using namespace std;
 using namespace SpiceQL;
@@ -35,6 +37,7 @@ void TempTestingFiles::SetUp() {
 
     // true if the directory was created.
     if (fs::create_directory(tpath)) {
+        SPDLOG_DEBUG("SPICEROOT = {}", tpath.generic_string());
         break;
     }
     if (i == max_tries) {
@@ -42,9 +45,11 @@ void TempTestingFiles::SetUp() {
     }
     i++;
   }
+
   tempDir = tpath;
 
   setenv("SPICEROOT", tempDir.c_str(), true);
+  setenv("SPICEQL_CACHE_DIR", tempDir.c_str(), true);
 }
 
 
@@ -169,6 +174,7 @@ void IsisDataDirectory::CompareKernelSets(vector<string> kVector, vector<string>
 
 void LroKernelSet::SetUp() {
   root = getenv("SPICEROOT");
+
   // Move Clock kernels
   // TODO: Programmatic clock kernels
   lskPath = fs::path("data") / "naif0012.tls";
@@ -190,7 +196,7 @@ void LroKernelSet::SetUp() {
   int bodyCode = -85000;
   std::string referenceFrame = "j2000";
 
-  ckPath1 = root / "ck" / "soc31.0001.bc";
+  ckPath1 = root / "ck" / "soc31_1111111_1111111_v21.bc";
   std::vector<std::vector<double>> avs = {{1,1,1}, {2,2,2}};
   std::vector<std::vector<double>> quats = {{0.2886751, 0.2886751, 0.5773503, 0.7071068 }, {0.4082483, 0.4082483, 0.8164966, 0 }};
   std::vector<double> times1 = {110000000, 120000000};
@@ -311,6 +317,8 @@ void LroKernelSet::SetUp() {
         }
     }
 })"_json;
+// should be created in the existing directory
+  Inventory::create_database();
 }
 
 void LroKernelSet::TearDown() {

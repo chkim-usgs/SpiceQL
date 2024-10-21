@@ -7,6 +7,7 @@
 #include "Fixtures.h"
 #include "spice_types.h"
 #include "query.h"
+#include "inventory.h"
 
 #include <SpiceUsr.h>
 
@@ -67,16 +68,8 @@ TEST_F(LroKernelSet, UnitTestStackedKernelCopyConstructor) {
 
 TEST_F(LroKernelSet, UnitTestStackedKernelSetConstructorDestructor) {
   // load all available kernels
-  nlohmann::json kernels = listMissionKernels(root, conf);
-  SPDLOG_DEBUG("results from listMissionKernels, {}", kernels.dump());
-
-  // do a time query
-  kernels = searchEphemerisKernels(kernels, {110000000, 120000001}, false);
+  nlohmann::json kernels = Inventory::search_for_kernelset("lroc", {"lsk", "sclk", "ck", "spk", "ik", "fk"}, 110000000, 120000001);
   SPDLOG_DEBUG("Kernels after search: {} ", kernels.dump());
-  // get only latest versions
-  kernels = getLatestKernels(kernels);
-
-  SPDLOG_DEBUG("results from getLatest: {} ", kernels.dump());
 
   // all the kernels in the group are now furnished.
   KernelSet ks(kernels);
@@ -90,7 +83,7 @@ TEST_F(LroKernelSet, UnitTestStackedKernelSetConstructorDestructor) {
 
     // should match what spice counts
     ktotal_c("text", &nkernels);
-    EXPECT_EQ(nkernels, 7);
+    EXPECT_EQ(nkernels, 6);
     ktotal_c("ck", &nkernels);
     EXPECT_EQ(nkernels, 2);
     ktotal_c("spk", &nkernels);
@@ -99,7 +92,7 @@ TEST_F(LroKernelSet, UnitTestStackedKernelSetConstructorDestructor) {
 
   // All kernels in previous stack should be unfurnished
   ktotal_c("text", &nkernels);
-  EXPECT_EQ(nkernels, 4);
+  EXPECT_EQ(nkernels, 3);
   ktotal_c("ck", &nkernels);
   EXPECT_EQ(nkernels, 1);
   ktotal_c("spk", &nkernels);

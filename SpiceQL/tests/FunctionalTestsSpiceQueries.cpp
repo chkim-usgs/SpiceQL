@@ -7,26 +7,19 @@
 
 #include "query.h"
 #include "utils.h"
+#include "inventory.h"
 
 using namespace std;
 using namespace SpiceQL;
 
 
 TEST_F(LroKernelSet, FunctionalTestSearchMissionKernels) {
-  setenv("SPICEROOT", root.c_str(), true);
-
-  // load all available kernels
-  nlohmann::json kernels = listMissionKernels(root, conf);
-
   // do a time query
-  kernels = searchEphemerisKernels(kernels, {110000000, 120000001}, false);
-  kernels = getLatestKernels(kernels);
-  
-  ASSERT_EQ(kernels["moc"]["spk"]["smithed"]["kernels"].size(), 2);
-  EXPECT_EQ(kernels["moc"]["spk"]["smithed"]["kernels"][0].size(), 1);
-  EXPECT_EQ(kernels["moc"]["spk"]["smithed"]["kernels"][1].size(), 1);
-  EXPECT_EQ(fs::path(kernels["moc"]["ck"]["reconstructed"]["kernels"][0][0].get<string>()).filename(), "soc31.0001.bc" );
-  EXPECT_EQ(fs::path(kernels["moc"]["ik"]["kernels"][0][0].get<string>()).filename(), "lro_instruments_v11.ti");
-  EXPECT_EQ(fs::path(kernels["moc"]["fk"]["kernels"][0][0].get<string>()).filename(), "lro_frames_1111111_v01.tf");
-  EXPECT_EQ(fs::path(kernels["moc"]["sclk"]["kernels"][0][0].get<string>()).filename(), "lro_clkcor_2020184_v00.tsc");
+  nlohmann::json kernels = Inventory::search_for_kernelset("lroc", {"lsk", "sclk", "ck", "spk", "ik", "fk"}, 110000000, 140000001);
+  cout << kernels.dump(4) << endl;
+  ASSERT_EQ(kernels["ck"].size(), 2);
+  EXPECT_EQ(fs::path(kernels["ck"][0].get<string>()).filename(), "soc31_1111111_1111111_v21.bc" );
+  EXPECT_EQ(fs::path(kernels["ik"][0].get<string>()).filename(), "lro_instruments_v11.ti");
+  EXPECT_EQ(fs::path(kernels["fk"][0].get<string>()).filename(), "lro_frames_1111111_v01.tf");
+  EXPECT_EQ(fs::path(kernels["sclk"][0].get<string>()).filename(), "lro_clkcor_2020184_v00.tsc");
 }

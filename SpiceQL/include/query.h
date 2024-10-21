@@ -84,37 +84,6 @@ namespace SpiceQL {
 
 
   /**
-   * @brief Returns all kernels available for a mission
-   *
-   * Returns a structured json object containing all available kernels for a specified mission
-   * along with their dependencies.
-   *
-   * TODO: Add a "See Also" on json format after the format matures a bit more.
-   *
-   * @param conf json conf file
-   * @returns list of paths matching ext
-  **/
-  nlohmann::json listMissionKernels(nlohmann::json conf);
-
-
-  /**
-   * @brief Returns all time dependent kernels available in the time range
-   *
-   * Returns a structured json object containing all available ck and spk kernels for a specified time
-   * range along with the associated spacecraft clock kernel.
-   *
-   * TODO: Add a "See Also" on json format after the format matures a bit more.
-   *
-   * @param kernels kernels to search
-   * @param times vector of times to match
-   * @param isContiguous if true, all times need to be in the kernel to match the query, else, any kernel that
-   *                     is in any of the times inputed get returned
-   * @returns json object with new kernels
-  **/
-  nlohmann::json searchEphemerisKernels(nlohmann::json kernels, std::vector<double> times, bool isContiguous = false, nlohmann::json cachedTimes = {});
-
-
-  /**
     * @brief acquire all kernels of a type according to a configuration JSON object
     *
     * Given the root directotry with kernels, a JSON configuration object and a kernel type string (e.g. ck, fk, spk),
@@ -151,9 +120,4 @@ namespace SpiceQL {
    */
   std::set<std::string> getKernelsAsSet(nlohmann::json kernels);
 
-  nlohmann::json searchAndRefineKernels(std::string mission,
-                                        std::vector<double> times = {},
-                                        std::string ckQuality = "reconstructed",
-                                        std::string spkQuality = "reconstructed",
-                                        std::vector<std::string> kernels = {"ck", "spk", "sclk", "ik", "iak", "fk", "tspk", "pck", "lsk"});
   }

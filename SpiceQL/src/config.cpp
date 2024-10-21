@@ -113,7 +113,6 @@ namespace SpiceQL {
 
     json::json_pointer parentPointer;
     string dataPath = getDataDirectory();
-    SPDLOG_DEBUG("Data Directory: {}", dataPath);
 
     json eval_json(copyConfig);
     if (!eval_json.contains(pointer)) {

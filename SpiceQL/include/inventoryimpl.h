@@ -18,20 +18,27 @@
 
 namespace SpiceQL {
 
+  extern std::string DB_HDF_FILE; 
+  extern std::string DB_START_TIME_KEY; 
+  extern std::string DB_STOP_TIME_KEY; 
+  extern std::string DB_TIME_FILES_KEY; 
+  extern std::string DB_SS_TIME_INDICES_KEY; 
+
+  std::string getCacheDir(); 
+  std::string getHdfFile();
+  
   class TimeIndexedKernels { 
     public: 
-    frozenca::BTreeMultiMap<double, size_t> start_times; 
-    frozenca::BTreeMultiMap<double, size_t> stop_times; 
-    std::vector<std::string> index; 
-
+    frozenca::BTreeMap<double, size_t> start_times; 
+    frozenca::BTreeMap<double, size_t> stop_times; 
+    std::vector<std::string> file_paths; 
   };
 
 
   class InventoryImpl {
     public:
     InventoryImpl(bool force_regen=false); 
-    std::string get_root_dir();
-    void read_database();
+    template<class T> T getKey(std::string key);
     void write_database();
     nlohmann::json search_for_kernelset(std::string instrument, std::vector<Kernel::Type> types, double start_time=-std::numeric_limits<double>::max(), double stop_time=std::numeric_limits<double>::max(),
                                             Kernel::Quality ckQuality=Kernel::Quality::SMITHED, Kernel::Quality spkQuality=Kernel::Quality::SMITHED,  bool enforce_quality=false);

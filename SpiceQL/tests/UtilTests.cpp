@@ -14,6 +14,7 @@ using namespace std::chrono;
 #include <SpiceUsr.h>
 #include "memo.h"
 #include "query.h"
+#include "inventory.h"
 
 #include <spdlog/spdlog.h>
 
@@ -365,27 +366,12 @@ TEST(UtilTests, testJson2DArrayTo2DVector) {
   } 
 }
 
-TEST(PluralSuit, UnitTestGetTargetStates) {
-  MockRepository mocks;
 
-  nlohmann::json getLatestKernelsJson;
-  getLatestKernelsJson["kernels"] = {{"/Some/Path/to/someKernel.x"}};
-  mocks.OnCallFunc(SpiceQL::getLatestKernels).Return(getLatestKernelsJson);
+TEST_F(LroKernelSet, UnitTestGetTargetStates) {
+  vector<double> ets = {110000000, 110000001};
+  vector<vector<double>> resStates = getTargetStates(ets, "LRO", "LRO", "J2000", "NONE", "lroc", "smithed", "smithed");
 
-  nlohmann::json searchMissionKernelsJson;
-  searchMissionKernelsJson["ck"]["reconstructed"]["kernels"] = {{"/Path/to/some/ck.bc"}};
-  searchMissionKernelsJson["spk"]["reconstructed"]["kernels"] = {{"/Path/to/some/spk.bsp"}};
-  mocks.OnCallFunc(SpiceQL::searchEphemerisKernels).Return(searchMissionKernelsJson);
-
-  vector<double> state = {0, 0, 0, 0, 0, 0, 0};
-  mocks.OnCallFunc(getTargetState).Return(state);
-
-  mocks.OnCallFunc(furnsh_c);
-
-  vector<double> ets = {110000000};
-  vector<vector<double>> resStates = getTargetStates(ets, "LRO", "LRO", "J2000", "NONE", "lro");
-
-  EXPECT_EQ(resStates.size(), 1);
+  EXPECT_EQ(resStates.size(), 2);
   ASSERT_EQ(resStates.at(0).size(), 7);
   EXPECT_DOUBLE_EQ(resStates.at(0)[0], 0.0);
   EXPECT_DOUBLE_EQ(resStates.at(0)[1], 0.0);
@@ -395,6 +381,7 @@ TEST(PluralSuit, UnitTestGetTargetStates) {
   EXPECT_DOUBLE_EQ(resStates.at(0)[5], 0.0);
   EXPECT_DOUBLE_EQ(resStates.at(0)[6], 0.0);
 }
+
 
 TEST_F(LroKernelSet, UnitTestGetTargetState) {
   nlohmann::json testKernelJson;
@@ -415,35 +402,16 @@ TEST_F(LroKernelSet, UnitTestGetTargetState) {
 }
 
 
-TEST(PluralSuit, UnitTestGetTargetOrientations) {
-  MockRepository mocks;
-
-  nlohmann::json getLatestKernelsJson;
-  getLatestKernelsJson["kernels"] = {{"/Some/Path/to/someKernel.x"}};
-  mocks.OnCallFunc(SpiceQL::getLatestKernels).Return(getLatestKernelsJson);
-
-  nlohmann::json searchMissionKernelsJson;
-  searchMissionKernelsJson["ck"]["reconstructed"]["kernels"] = {{"/Path/to/some/ck.bc"}};
-  searchMissionKernelsJson["spk"]["reconstructed"]["kernels"] = {{"/Path/to/some/spk.bsp"}};
-  mocks.OnCallFunc(SpiceQL::searchEphemerisKernels).Return(searchMissionKernelsJson);
-
-  vector<double> orientation = {0, 0, 0, 0, 0, 0, 0};
-  mocks.OnCallFunc(getTargetOrientation).Return(orientation);
-
-  mocks.OnCallFunc(furnsh_c);
-
+TEST_F(LroKernelSet, UnitTestGetTargetOrientations) {
   vector<double> ets = {110000000};
-  vector<vector<double>> resOrientations = getTargetOrientations(ets, 1, -85620, "lro");
+  vector<vector<double>> resOrientations = getTargetOrientations(ets, 1, -85000, "lroc");
 
   EXPECT_EQ(resOrientations.size(), 1);
   ASSERT_EQ(resOrientations.at(0).size(), 7);
-  EXPECT_DOUBLE_EQ(resOrientations.at(0)[0], 0.0);
+  EXPECT_DOUBLE_EQ(resOrientations.at(0)[0], 1.0);
   EXPECT_DOUBLE_EQ(resOrientations.at(0)[1], 0.0);
   EXPECT_DOUBLE_EQ(resOrientations.at(0)[2], 0.0);
   EXPECT_DOUBLE_EQ(resOrientations.at(0)[3], 0.0);
-  EXPECT_DOUBLE_EQ(resOrientations.at(0)[4], 0.0);
-  EXPECT_DOUBLE_EQ(resOrientations.at(0)[5], 0.0);
-  EXPECT_DOUBLE_EQ(resOrientations.at(0)[6], 0.0);
 }
 
 

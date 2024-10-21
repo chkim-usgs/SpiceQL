@@ -213,6 +213,8 @@ namespace SpiceQL {
     if (searchKernels) {
       ephemKernels = Inventory::search_for_kernelset(mission, {"sclk", "ck", "spk", "pck", "tspk"}, ets.front(), ets.back(), ckQuality, spkQuality);
       lskKernels = Inventory::search_for_kernelset("base", {"lsk"});
+      SPDLOG_DEBUG("LSK Kernels : {}", lskKernels.dump(4));
+      SPDLOG_DEBUG("{} Kernels : {}", mission, ephemKernels.dump(4)); 
     }
 
     auto start = high_resolution_clock::now();

@@ -13,6 +13,8 @@
 #include <cereal/types/map.hpp>
 #include <cereal/types/utility.hpp>
 
+#include <highfive/H5Easy.hpp>
+#include <highfive/highfive.hpp>
 
 #include "config.h"
 #include "inventoryimpl.h"
@@ -35,6 +37,51 @@ namespace fc = frozenca;
 
 namespace SpiceQL { 
 
+  string DB_SPICE_ROOT_KEY = "spice";
+  string DB_HDF_FILE = "spiceqldb.hdf";
+  string DB_START_TIME_KEY = "starttime"; 
+  string DB_STOP_TIME_KEY = "stoptime"; 
+  string DB_TIME_FILES_KEY = "path_index"; 
+  string DB_SS_TIME_INDICES_KEY = "ss_index"; 
+
+  string getCacheDir() { 
+      static std::string  CACHE_DIRECTORY = "";
+
+      if (CACHE_DIRECTORY == "") { 
+          const char* cache_dir_char = getenv("SPICEQL_CACHE_DIR");
+      
+          std::string  cache_dir; 
+      
+          if (cache_dir_char == NULL) {
+              std::string  tempname = "spiceql-cache-" + gen_random(10);
+              cache_dir = fs::temp_directory_path() / tempname / "spiceql_cache"; 
+          }
+          else {
+              cache_dir = cache_dir_char;
+          }
+
+          if (!fs::is_directory(cache_dir)) { 
+              SPDLOG_DEBUG("{} does not exist, attempting to create the directory", cache_dir);
+              fs::create_directories(cache_dir); 
+          }
+      
+          CACHE_DIRECTORY = cache_dir;
+          SPDLOG_DEBUG("Setting cache directory to: {}", CACHE_DIRECTORY);  
+      } 
+      else { 
+          SPDLOG_TRACE("Cache Directory Already Set: {}", CACHE_DIRECTORY);  
+      }
+
+      return CACHE_DIRECTORY;
+  }
+
+
+  string getHdfFile() { 
+      static std::string db_path = fs::path(getCacheDir()) / DB_HDF_FILE;
+      return db_path;
+  }
+  
+
   // objs need to be passed in c-style because of a lack of copy contructor in BtreeMap
   void collectStartStopTimes(string mission, string type, string quality, TimeIndexedKernels *kernel_times) { 
     SPDLOG_TRACE("In globTimeIntervals.");
@@ -53,19 +100,30 @@ namespace SpiceQL {
           // to get the final list
           size_t index = 0;
           
-          index = kernel_times->index.size(); 
+          index = kernel_times->file_paths.size(); 
 
           // cant contruct these in line for whatever reason 
           fc::BTreePair<double, size_t> p;
           p.first = sstimes.first; 
-          p.second = index; 
+          p.second = index;
+          if(kernel_times->start_times.contains(p.first)) { 
+            p.first-=0.0000001; 
+          } 
           kernel_times->start_times.insert(p);
 
           fc::BTreePair<double, size_t> p2;
           p2.first = sstimes.second; 
-          p2.second = index;  
+          p2.second = index; 
+
+          if(kernel_times->stop_times.contains(p2.first)) { 
+            p2.first+=0.0000001; 
+          }  
           kernel_times->stop_times.insert(p2);
-          kernel_times->index.push_back(kernel);
+
+          // get relative path to make db portable 
+          fs::path relative_path_kernel = fs::relative(kernel, getDataDirectory());
+          SPDLOG_TRACE("Relative Kernel: {}", relative_path_kernel.generic_string()); 
+          kernel_times->file_paths.push_back(relative_path_kernel);
         }
       }
     }
@@ -73,7 +131,8 @@ namespace SpiceQL {
 
 
   InventoryImpl::InventoryImpl(bool force_regen) : m_required_kernels() { 
-    fs::path db_root = get_root_dir();
+    fs::path db_root = getCacheDir();
+    fs::path db_file = db_root / DB_HDF_FILE; 
 
     // create the database 
     if (!fs::exists(db_root) || force_regen) { 
@@ -102,10 +161,10 @@ namespace SpiceQL {
               if (kernel_obj.contains(quality)) {
 
                 // make the keys match Config's nested keys
-                string map_key = mission + ":" + kernel_type +":"+quality+":kernels";
+                string map_key = mission + "/" + kernel_type +"/"+quality+"/kernels";
                 
                 // make sure no path symbols are in the key
-                replaceAll(map_key, "/", ":");
+                // replaceAll(map_key, "/", ":");
                 
                 TimeIndexedKernels *tkernels = new TimeIndexedKernels();
                 // btrees cannot be copied, so use pointers
@@ -118,18 +177,17 @@ namespace SpiceQL {
             vector<json::json_pointer> ptrs = findKeyInJson(kernel_obj, "kernels", true); 
             
             for (auto &ptr : ptrs) { 
-              string btree_key = mission + ":" + kernel_type + ":kernels";
-              replaceAll(btree_key, "/", ":"); 
-              // preallocate a vector
+              string btree_key = mission + "/" + kernel_type + "/kernels";
               vector<string> kernel_vec;
 
               // Doing it bracketless, there are too many brackets
               for (auto &subarr: kernel_obj[ptr]) 
                 for (auto &kernel : subarr) { 
                   string k = kernel.get<string>();
-                  regex_replace(k, std::regex((string)db_root), "$SPICEROOT/");
-                  kernel_vec.push_back(k); 
-                }
+                  fs::path relative_path_kernel = fs::relative(k, getDataDirectory());
+                  SPDLOG_TRACE("Relative Kernel: {}", relative_path_kernel.generic_string()); 
+                  kernel_vec.push_back(relative_path_kernel); 
+                } 
               m_nontimedep_kerns[btree_key] = kernel_vec; 
             } 
           }
@@ -140,35 +198,33 @@ namespace SpiceQL {
       write_database();
     }
     else { // load the database 
-      read_database(); 
+      // read_database(); 
     }
-
-  }
-
-  string InventoryImpl::get_root_dir() { 
-    fs::path cache_dir = Memo::getCacheDir();
-    return cache_dir / "dbindexes"; 
   }
 
 
-  void InventoryImpl::read_database() { 
-    fs::path db_root = get_root_dir(); 
-    fs::path non_time_dep_file = db_root/"non_time_dep.bin";
+  template<class T>
+  T InventoryImpl::getKey(string key) { 
+    string hdf_file = fs::path(getCacheDir()) / DB_HDF_FILE;
 
-    if (!fs::exists(non_time_dep_file)) { 
-      throw runtime_error("DB for text kernels (" + non_time_dep_file.generic_string() + ") does not exist");
+    if (!fs::exists(hdf_file)) { 
+      throw runtime_error("DB for kernels (" + hdf_file + ") does not exist");
     }
+    HighFive::File file(hdf_file, HighFive::File::ReadOnly);    
 
-    // kernels are simple, store as a binary archive
-    std::ifstream ofs_index(non_time_dep_file);
-    cereal::BinaryInputArchive ia(ofs_index);
-    ia >> m_nontimedep_kerns;
-
-    // initialize empty time indexes by deleting existing keys
-    for (auto it=m_timedep_kerns.begin(); it!=m_timedep_kerns.end(); ++it) { 
-      // should naturally delete pointers
-      m_timedep_kerns.erase(it); 
-    } 
+    try { 
+      if (!file.exist(key)) 
+        throw runtime_error("Key ["+key+"] does not exist");
+      // get key
+      auto dataset = file.getDataSet(key);
+      // allocate data 
+      T data = dataset.read<T>();    
+      // load data into variable
+      dataset.read(data);
+      return data; 
+    } catch (exception &e) { 
+      throw runtime_error("Failed to key [" + key + "] from [" + hdf_file + "].");
+    }
   }
 
 
@@ -177,6 +233,9 @@ namespace SpiceQL {
     // get time dep kernels first 
     json kernels;
     instrument = toLower(instrument);
+
+    fs::path data_dir = getDataDirectory();
+
     if (start_time > stop_time) { 
       throw range_error("start time cannot be greater than stop time.");
     }
@@ -197,8 +256,9 @@ namespace SpiceQL {
 
         // iterate down the qualities 
         for(int i = (int)quality; i > 0 && !found; i--) { 
-          string key = instrument+":"+Kernel::translateType(type)+":"+Kernel::QUALITIES.at(i)+":"+"kernels";
+          string key = instrument+"/"+Kernel::translateType(type)+"/"+Kernel::QUALITIES.at(i)+"/"+"kernels";
           SPDLOG_DEBUG("Key: {}", key);
+          quality = (Kernel::Quality)i; 
 
           if (m_timedep_kerns.contains(key)) { 
             SPDLOG_DEBUG("Key {} found", key); 
@@ -206,41 +266,40 @@ namespace SpiceQL {
             // we can get the key 
             time_indices = m_timedep_kerns[key]; 
             found = true;
-            quality = (Kernel::Quality)i; 
           }
-          else { 
-            // try to load the memory mapped files 
-            fs::path cache = Memo::getCacheDir(); 
-            cache /= "dbindexes" / (fs::path)key;
-            SPDLOG_TRACE("Loading indices from directory: {}", (string)cache);
-            
-            if(!fs::exists(cache)) { 
-              // skip 
-              SPDLOG_TRACE("cache {} does not exist.", (string)cache);
-              continue;
-            }
-            found = true;
+          else {
+            // try to load the binary files 
             time_indices = new TimeIndexedKernels();
-            quality = (Kernel::Quality)i; 
+            
             try {
-              ifstream start_times_ifs{cache/"start_time.bin", ios_base::in | ios_base::binary};
-              start_times_ifs >> time_indices->start_times;
-              ifstream stop_times_ifs{cache/"stop_time.bin", ios_base::in | ios_base::binary};
-              stop_times_ifs >> time_indices->stop_times;        
-              // indices are simple, store as a binary archive
-              std::ifstream ifs_index(cache/"index.bin");
-              cereal::BinaryInputArchive ia(ifs_index);
-              ia >> time_indices->index; 
-            } catch (runtime_error &e) {
-              SPDLOG_TRACE("Couldn't find timedep/" + key+ ": " + e.what());
+              SPDLOG_TRACE("Starting desrializing the DB");
+
+              vector<double> start_times_v = getKey<vector<double>>(DB_SPICE_ROOT_KEY+"/"+key+"/"+DB_START_TIME_KEY); 
+              vector<double> stop_times_v = getKey<vector<double>>(DB_SPICE_ROOT_KEY+"/"+key+"/"+DB_STOP_TIME_KEY);
+              vector<size_t> file_index_v = getKey<vector<size_t>>(DB_SPICE_ROOT_KEY+"/"+key+"/"+DB_SS_TIME_INDICES_KEY); 
+              vector<string> file_paths_v = getKey<vector<string>>(DB_SPICE_ROOT_KEY+"/"+key+"/"+DB_TIME_FILES_KEY); 
+
+              time_indices->file_paths = file_paths_v;
+              
+              // load start_times 
+              for(size_t i = 0; i < start_times_v.size(); i++) {
+                time_indices->start_times[start_times_v[i]] = file_index_v[i];
+                time_indices->stop_times[stop_times_v[i]] = file_index_v[i];
+              }
+
+              found = true;
+            }
+            catch (runtime_error &e) { 
+              // should probably replace with a more specific exception 
+              SPDLOG_TRACE("Couldn't find "+DB_SPICE_ROOT_KEY+"/" + key+ ". " + e.what());
               continue;
             }
           }
-          if (time_indices && time_indices->index.size() > 0) break; // only interate once if quality is enforced  
+          if (enforce_quality) break; // only interate once if quality is enforced 
         }
 
         if (time_indices) { 
-          SPDLOG_TRACE("NUMBER OF KERNELS: {}", time_indices->index.size());
+          SPDLOG_TRACE("NUMBER OF KERNELS: {}", time_indices->file_paths.size());
           SPDLOG_TRACE("NUMBER OF START TIMES: {}", time_indices->start_times.size());
           SPDLOG_TRACE("NUMBER OF STOP TIMES: {}", time_indices->stop_times.size()); 
         } else { 
@@ -256,31 +315,55 @@ namespace SpiceQL {
         // Get everything starting before the stop_time; 
         auto start_upper_bound = time_indices->start_times.upper_bound(stop_time);
         for(auto it = time_indices->start_times.begin() ;it != start_upper_bound; it++) {
+          iterations++;
           start_time_kernels.insert(it->second);             
         }
 
+        SPDLOG_TRACE("NUMBER OF KERNELS MATCHING START TIME: {}", start_time_kernels.size()); 
+
         // Get everything stopping after the start_time; 
         auto stop_lower_bound = time_indices->stop_times.lower_bound(start_time);
-        for(auto &it = stop_lower_bound;it != time_indices->stop_times.end(); it++) { 
-          // if it's also in the start_time set, add it to the list
-          iterations++;
-          
-          if (start_time_kernels.contains(it->second)) {
-            final_time_kernels.push_back(time_indices->index.at(it->second));
-          }
-        } 
+        if(time_indices->stop_times.end() == stop_lower_bound && start_time_kernels.contains(stop_lower_bound->second)) { 
+          final_time_kernels.push_back(time_indices->file_paths.at(stop_lower_bound->second));
+        }
+        else { 
+          for(auto &it = stop_lower_bound;it != time_indices->stop_times.end(); it++) { 
+            // if it's also in the start_time set, add it to the list
+            iterations++;
+            
+            if (start_time_kernels.contains(it->second)) {
+              final_time_kernels.push_back(data_dir / time_indices->file_paths.at(it->second));
+            }
+          } 
+        }
         if (final_time_kernels.size()) { 
           kernels[Kernel::translateType(type)] = final_time_kernels;
           kernels[qkey] = Kernel::translateQuality(quality);
         }
-        SPDLOG_TRACE("NUMBER OF ITERATIONS: {}", iterations); 
+        SPDLOG_TRACE("NUMBER OF ITERATIONS: {}", iterations);
+        SPDLOG_TRACE("NUMBER OF KERNELS FOUND: {}", final_time_kernels.size());  
       }
       else { // text/non time based kernels
         SPDLOG_DEBUG("Trying to search time independant kernels");
-        string key = instrument+":"+Kernel::translateType(type)+":"+"kernels"; 
+        string key = instrument+"/"+Kernel::translateType(type)+"/"+"kernels"; 
         SPDLOG_DEBUG("GETTING {} with key {}", Kernel::translateType(type), key);
-        if (m_nontimedep_kerns.contains(key) && !m_nontimedep_kerns[key].empty()) 
-          kernels[Kernel::translateType(type)] = m_nontimedep_kerns[key];
+        if (m_nontimedep_kerns.contains(key) && !m_nontimedep_kerns[key].empty()) {  
+          vector<string> ks = m_nontimedep_kerns[key]; 
+          for(auto &e : ks) e = data_dir / e; // re-add the data dir 
+          kernels[Kernel::translateType(type)] = ks;
+        
+        }
+        else { 
+          // load from DB 
+          try { 
+            vector<string> ks = getKey<vector<string>>(DB_SPICE_ROOT_KEY + "/"+key);
+            for(auto &e : ks) e = data_dir / e; // re-add the data dir
+            kernels[Kernel::translateType(type)] = ks;
+          } catch (runtime_error &e) { 
+            SPDLOG_TRACE("{}", e.what()); // usually a key not found error
+            continue;
+          }
+        }
       }
     }
     return kernels;
@@ -288,34 +371,55 @@ namespace SpiceQL {
   
 
   void InventoryImpl::write_database() { 
-    fs::path db_root = get_root_dir(); 
+    fs::path db_root = getCacheDir(); 
+    string hdf_file = db_root / DB_HDF_FILE;
+    
+    // delete if exists
+    fs::remove(hdf_file);
+    H5Easy::File file(hdf_file, H5Easy::File::Create); 
 
     for (auto it=m_timedep_kerns.begin(); it!=m_timedep_kerns.end(); ++it) {
-      string kernel_key = it->first;         
+      string kernel_key = it->first; 
+      TimeIndexedKernels *kernels = m_timedep_kerns[kernel_key];       
 
-      // make sure no path symbols are in the key
-      fs::path db_subdir = db_root / kernel_key;
-      
-      fs::create_directories(db_subdir);
-      
-      TimeIndexedKernels *kernels = m_timedep_kerns[it->first];       
-       
-      // kernels are simple, store as a binary archive
-      std::ofstream ofs_index(db_subdir/"index.bin");
-      cereal::BinaryOutputArchive oa(ofs_index);
-      oa << kernels->index;
-      
-      // the rest as memory mapped files 
-      std::ofstream ofs_start_time{db_subdir/"start_time.bin", ios_base::out|ios_base::binary|ios_base::trunc};
-      ofs_start_time << kernels->start_times;
-      std::ofstream ofs_stop_time{db_subdir/"stop_time.bin", ios_base::out|ios_base::binary|ios_base::trunc};
-      ofs_stop_time << kernels->stop_times;
+      /* Save HDF files */
+      if (kernels->file_paths.size() > 0) {
+        // save index
+        H5Easy::dump(file, DB_SPICE_ROOT_KEY + "/"+kernel_key+"/"+DB_TIME_FILES_KEY, kernels->file_paths, H5Easy::DumpMode::Overwrite);
+
+        // preallocate everything 
+        vector<double> start_times_v;
+        start_times_v.reserve(kernels->start_times.size());
+        vector<double> stop_times_v;
+        stop_times_v.reserve(kernels->stop_times.size());
+        vector<size_t> indices_v;
+        indices_v.reserve(kernels->start_times.size());
+
+        for (const auto &[k, v] : kernels->start_times) { 
+          start_times_v.push_back(k);
+          indices_v.push_back(v);
+        }
+
+        for (const auto &[k, v] : kernels->stop_times) { 
+          stop_times_v.push_back(k);
+        } 
+
+        H5Easy::dump(file, DB_SPICE_ROOT_KEY + "/"+kernel_key+"/"+DB_START_TIME_KEY, start_times_v, H5Easy::DumpMode::Overwrite);
+        H5Easy::dump(file, DB_SPICE_ROOT_KEY + "/"+kernel_key+"/"+DB_STOP_TIME_KEY, stop_times_v, H5Easy::DumpMode::Overwrite);
+        H5Easy::dump(file, DB_SPICE_ROOT_KEY + "/"+kernel_key+"/"+DB_SS_TIME_INDICES_KEY, indices_v, H5Easy::DumpMode::Overwrite);
+      }
     }
 
-    db_root /= "non_time_dep.bin";
-    std::ofstream ofs(db_root);
-    cereal::BinaryOutputArchive oa(ofs);
-    oa << m_nontimedep_kerns;
+    /* Save HDF file */
+    {
+      for(auto &e : m_nontimedep_kerns) { 
+        if(e.second.size() > 0) {
+          SPDLOG_DEBUG("Writing {} of with {} kernels.", e.first, e.second.size());
+          H5Easy::dump(file, DB_SPICE_ROOT_KEY + "/"+e.first, e.second, H5Easy::DumpMode::Overwrite);
+        }
+      }
+    }
+
   }
 
 };
