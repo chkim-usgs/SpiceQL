@@ -15,7 +15,10 @@
  * 
  */
 namespace SpiceQL {
-  void load(std::string path, bool force_refurnsh); 
+  extern const std::vector<std::string> KERNEL_TYPES;
+  extern const std::vector<std::string> KERNEL_QUALITIES;
+  
+  void load(std::string path, bool force_refurnsh=true); 
   void unload(std::string path);
 
   /**
@@ -50,17 +53,6 @@ namespace SpiceQL {
         RECONSTRUCTED = 3, // Supplemented by real spacecraft/body data
         SMITHED = 4,       // Controlled Kernels
       };
-
-      /**
-       * used for converting string and int kernal quality
-       */
-      static const std::vector<std::string> QUALITIES;
-      
-      /**
-       * used for converting between string and int kernal types
-       */
-      static const std::vector<std::string> TYPES;
-
 
       /**
        * @brief Switch between Kernel type enum to string

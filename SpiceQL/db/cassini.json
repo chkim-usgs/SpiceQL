@@ -29,7 +29,6 @@
       ]
     },
     "pck": {
-      "kernels": "^pck[0-9]{5}.tpc$",
       "smithed": {
         "kernels": "^cpck15Dec2017_2019Shape.tpc$"
       }

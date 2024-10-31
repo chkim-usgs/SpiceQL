@@ -98,7 +98,7 @@ namespace SpiceQL {
     transform(s.begin(), s.end(), s.begin(), [](unsigned char c){ return tolower(c); });
     return s;
   }
-
+  
 
   string replaceAll(string str, const string& from, const string& to) {
     size_t start_pos = 0;
@@ -209,17 +209,13 @@ namespace SpiceQL {
     }
 
     json ephemKernels = {};
-    json baseKernels = {};
 
     if (searchKernels) {
-      ephemKernels = Inventory::search_for_kernelset(mission, {"sclk", "ck", "spk", "pck", "tspk", "fk"}, ets.front(), ets.back(), ckQuality, spkQuality);
-      baseKernels = Inventory::search_for_kernelset("base", {"lsk", "pck", "spk"});
-      SPDLOG_DEBUG("Base Kernels : {}", baseKernels.dump(4));
+      ephemKernels = Inventory::search_for_kernelsets({mission, observer, "base"}, {"sclk", "ck", "spk", "pck", "tspk", "fk", "lsk", "fk"}, ets.front(), ets.back(), ckQuality, spkQuality);
       SPDLOG_DEBUG("{} Kernels : {}", mission, ephemKernels.dump(4));
     }
 
     auto start = high_resolution_clock::now();
-    KernelSet baseSet(baseKernels);
     KernelSet ephemSet(ephemKernels);
 
     auto stop = high_resolution_clock::now();
@@ -456,19 +452,13 @@ namespace SpiceQL {
     }
 
     json ephemKernels = {};
-    json lskKernels = {};
-    json pckKernels = {};
 
     if (searchKernels) {
-      ephemKernels = Inventory::search_for_kernelset(mission, {"sclk", "ck", "pck", "fk", "tspk"}, ets.front(), ets.back(), ckQuality, "noquality");
-      lskKernels = Inventory::search_for_kernelset("base", {"lsk"});
-      pckKernels = Inventory::search_for_kernelset("base", {"pck"});
+      ephemKernels = Inventory::search_for_kernelsets({mission, "base"}, {"sclk", "ck", "pck", "fk", "tspk", "lsk", "tspk"}, ets.front(), ets.back(), ckQuality, "noquality");
     }
 
     auto start = high_resolution_clock::now();
     KernelSet ephemSet(ephemKernels);
-    KernelSet lskSet(lskKernels);
-    KernelSet pckSet(pckKernels);
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<microseconds>(stop - start);
     SPDLOG_INFO("Time in microseconds to furnish kernel sets: {}", duration.count());
@@ -952,7 +942,7 @@ namespace SpiceQL {
     //this resizing is done because otherwise a spice cell will append new data
     //to the last "currCell"
     ssize_c(0, &currCell);
-    ssize_c(100, &currCell);
+    ssize_c(200000, &currCell);
 
     SPICEDOUBLE_CELL(cover, 200000);
 
@@ -1050,14 +1040,14 @@ namespace SpiceQL {
     string currFile = fileType;
 
     //create a spice cell capable of containing all the objects in the kernel.
-    SPICEINT_CELL(currCell, 200000);
+    SPICEINT_CELL(currCell, 300000);
 
     //this resizing is done because otherwise a spice cell will append new data
     //to the last "currCell"
     ssize_c(0, &currCell);
-    ssize_c(200000, &currCell);
+    ssize_c(300000, &currCell);
 
-    SPICEDOUBLE_CELL(cover, 200000);
+    SPICEDOUBLE_CELL(cover, 300000);
 
     if (currFile == "SPK") {
       spkobj_c(kpath.c_str(), &currCell);
@@ -1083,17 +1073,17 @@ namespace SpiceQL {
       if (body < 0) {
         //find the correct coverage window
         if(currFile == "SPK") {
-          SPICEDOUBLE_CELL(cover, 200000);
+          SPICEDOUBLE_CELL(cover, 300000);
           ssize_c(0, &cover);
-          ssize_c(200000, &cover);
+          ssize_c(300000, &cover);
           spkcov_c(kpath.c_str(), body, &cover);
           getStartStopFromInterval(cover);
         }
         else if(currFile == "CK") {
           //  200,000 is the max coverage window size for a CK kernel
-          SPICEDOUBLE_CELL(cover, 200000);
+          SPICEDOUBLE_CELL(cover, 300000);
           ssize_c(0, &cover);
-          ssize_c(200000, &cover);
+          ssize_c(300000, &cover);
 
           // A SPICE SEGMENT is composed of SPICE INTERVALS
           ckcov_c(kpath.c_str(), body, SPICEFALSE, "INTERVAL", 0.0, "TDB", &cover);
