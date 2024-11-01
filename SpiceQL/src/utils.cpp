@@ -1000,6 +1000,8 @@ namespace SpiceQL {
 
 
   pair<double, double> getKernelStartStopTimes(string kpath) {
+    SPDLOG_TRACE("getKernelStartStopTimes({})", kpath);
+
     double start_time = 0;
     double stop_time = 0;
     
@@ -1013,6 +1015,7 @@ namespace SpiceQL {
 
       for(int j = 0;  j < niv;  j++) {
         //Get the endpoints of the jth interval.
+        SPDLOG_TRACE("Collecting start stop times");
         wnfetd_c(&coverage, j, &begin, &end);
         checkNaifErrors();
 
@@ -1076,6 +1079,7 @@ namespace SpiceQL {
           SPICEDOUBLE_CELL(cover, 300000);
           ssize_c(0, &cover);
           ssize_c(300000, &cover);
+          SPDLOG_TRACE("Getting spk coverage");
           spkcov_c(kpath.c_str(), body, &cover);
           getStartStopFromInterval(cover);
         }
@@ -1084,9 +1088,11 @@ namespace SpiceQL {
           SPICEDOUBLE_CELL(cover, 300000);
           ssize_c(0, &cover);
           ssize_c(300000, &cover);
+          SPDLOG_TRACE("Getting ck coverage");
 
           // A SPICE SEGMENT is composed of SPICE INTERVALS
-          ckcov_c(kpath.c_str(), body, SPICEFALSE, "INTERVAL", 0.0, "TDB", &cover);
+          ckcov_c(kpath.c_str(), body, SPICEFALSE, "SEGMENT", 0.0, "TDB", &cover);
+          SPDLOG_TRACE("collecting start stop times");
 
           getStartStopFromInterval(cover);
         }
