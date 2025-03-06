@@ -2,7 +2,7 @@ name: Deploy
 
 on:
   workflow_run:
-    workflows: ["CMake"]
+    workflows: ["Build-And-Test"]
     branches: [main]
     types:
       - completed
