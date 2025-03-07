@@ -63,13 +63,6 @@ jobs:
             conda info
             conda list
   
-      - name: Create Build Environment
-        # Some projects don't allow in-source building, so create separate build and install
-        # directorie; we'll use them as our working directories for subsequent commands.
-        run: |
-            cmake -E make_directory ${{github.workspace}}/build
-            cmake -E make_directory ${{github.workspace}}/install
-  
       - name: Build
         working-directory: ${{github.workspace}}
         # Execute the build.
