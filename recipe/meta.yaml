@@ -44,8 +44,8 @@ requirements:
     - cpp-filesystem
     - cspice
     - cereal
+    - highfive
     - spdlog
-    - libhiredis
   host:
     - libgcc-ng  # [linux]
     - libstdcxx-ng  # [linux]
@@ -56,7 +56,6 @@ requirements:
     - cspice
     - cereal
     - spdlog
-    - libhiredis
   run:
     - libgcc-ng  # [linux]
     - libstdcxx-ng  # [linux]
@@ -65,8 +64,8 @@ requirements:
     - python
     - cspice
     - cereal
+    - highfive
     - spdlog
-    - libhiredis
 
 test:
   imports:
