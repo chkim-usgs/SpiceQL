@@ -32,40 +32,29 @@ build:
   skip: true  # [win]
 
 requirements:
+requirements:
   build:
-    - {{ compiler('cxx') }}  # [linux]
-    - libgcc-ng  # [linux]
-    - libstdcxx-ng  # [linux]
+    - {{ compiler('cxx') }}
+    - {{ stdlib("c") }}
     - cmake >=3.14
-    - pip
     - make
     - swig
-    - fmt ==9.1.0
-    - cpp-filesystem
-    - cspice
-    - cereal
-    - highfive
-    - spdlog
+    - fmt >9,<10
+    - spdlog =1.12
+
   host:
-    - libgcc-ng  # [linux]
-    - libstdcxx-ng  # [linux]
-    - fmt ==9.1.0  # [osx]
-    - libcxx  # [osx]
     - python
+    - setuptools
+    - cpp-filesystem
     - pip
-    - cspice
-    - cereal
-    - spdlog
-  run:
-    - libgcc-ng  # [linux]
-    - libstdcxx-ng  # [linux]
-    - fmt ==9.1.0  # [osx]
-    - libcxx  # [osx]
-    - python
-    - cspice
     - cereal
     - highfive
-    - spdlog
+    - cspice
+  run:
+    - cspice
+    - hdf5
+    - libcurl
+    - python
     - uvicorn
 
 test:
