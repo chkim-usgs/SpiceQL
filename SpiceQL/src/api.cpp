@@ -13,7 +13,6 @@
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 
-#include "config.h"
 #include "query.h"
 #include "spice_types.h"
 #include "utils.h"
@@ -135,7 +134,7 @@ namespace SpiceQL {
                 escaped << c;
                 continue;
             }
-            
+
             if (c == '"'){
                 continue;
             }
@@ -152,7 +151,7 @@ namespace SpiceQL {
     json spiceAPIQuery(std::string functionName, json args, std::string method){
         restincurl::Client client;
         // Need to be able to set URL externally
-        std::string queryString = "http://127.0.0.1:8080/" + functionName + "?";
+        std::string queryString = getRestUrl() + functionName + "?";
 
         json j;
 
@@ -171,21 +170,36 @@ namespace SpiceQL {
             std::string encodedString = url_encode(queryString);
             SPDLOG_TRACE("encodedString = {}", encodedString);
             client.Build()->Get(encodedString).Option(CURLOPT_FOLLOWLOCATION, 1L).AcceptJson().WithCompletion([&](const restincurl::Result& result) {
-            SPDLOG_TRACE("GET result body = {}", result.body);
-            j = json::parse(result.body);
+                if (result.http_response_code != 200) {
+                    SPDLOG_DEBUG("[Failed HTTP request] HTTP Code: {}, Message: {}, Payload: {}", result.http_response_code, result.msg, result.body);
+                }
+                SPDLOG_TRACE("GET result body = {}", result.body);
+                j = json::parse(result.body);
             }).ExecuteSynchronous();
         } else {
             SPDLOG_TRACE("POST");
             client.Build()->Post(queryString).Option(CURLOPT_FOLLOWLOCATION, 1L).AcceptJson().WithJson(args.dump()).WithCompletion([&](const restincurl::Result& result) {
-            SPDLOG_TRACE("POST result = {}", result.body);
-            j = json::parse(result.body);
+                if (result.http_response_code != 200) {
+                    SPDLOG_DEBUG("[Failed HTTP request] HTTP Code: {}, Message: {}, Payload: {}", result.http_response_code, result.msg, result.body);
+                }
+                SPDLOG_TRACE("POST result = {}", result.body);
+                j = json::parse(result.body);
             }).ExecuteSynchronous();
         }
         
         client.CloseWhenFinished();
         client.WaitForFinish();
 
-        // @TODO throw exception if no json or invalid json is returned
+        // Check is JSON is valid
+        if (j.is_null() || !json::accept(j.dump())) {
+            throw runtime_error("REST API Response is not a valid JSON.");
+        }
+
+        // Check for successful call
+        if (!(j["statusCode"] == 200)) {
+            throw runtime_error("REST API Error Response: [" + j["body"].dump() + "]");
+        }
+
         return j;
     }
 
@@ -220,7 +234,7 @@ namespace SpiceQL {
         json ephemKernels = {};
 
         if (searchKernels) {
-            ephemKernels = Inventory::search_for_kernelsets({mission, target, observer, "base"}, {"sclk", "ck", "spk", "pck", "tspk", "fk", "lsk", "fk"}, ets.front(), ets.back(), ckQualities, spkQualities);
+            ephemKernels = Inventory::search_for_kernelsets({mission, target, observer, "base"}, {"sclk", "ck", "spk", "pck", "tspk", "lsk", "fk"}, ets.front(), ets.back(), ckQualities, spkQualities);
             SPDLOG_DEBUG("{} Kernels : {}", mission, ephemKernels.dump(4));
         }
 
@@ -278,7 +292,7 @@ namespace SpiceQL {
         json ephemKernels = {};
 
         if (searchKernels) {
-            ephemKernels = Inventory::search_for_kernelsets({mission, "base"}, {"sclk", "ck", "pck", "fk", "tspk", "lsk", "tspk"}, ets.front(), ets.back(), ckQualities, {"noquality"});
+            ephemKernels = Inventory::search_for_kernelsets({mission, "base"}, {"sclk", "ck", "pck", "fk", "lsk", "tspk"}, ets.front(), ets.back(), ckQualities, {"noquality"});
         }
 
         if (!kernelList.empty()) {
@@ -356,11 +370,10 @@ namespace SpiceQL {
 
 
    pair<string, json> doubleEtToSclk(int frameCode, double et, string mission, bool useWeb, bool searchKernels, vector<string> kernelList) {
-        SPDLOG_TRACE("calling strSclkToEt({}, {}, {}, {}, {}, {})", frameCode, et, mission, useWeb, searchKernels, kernelList.size());
+        SPDLOG_TRACE("calling doubleEtToSclk({}, {}, {}, {}, {}, {})", frameCode, et, mission, useWeb, searchKernels, kernelList.size());
 
-        Config missionConf;
         json ephemKernels;
-       
+
         if (useWeb) {
             json args = json::object({
                 {"frameCode", frameCode},
@@ -375,7 +388,7 @@ namespace SpiceQL {
         }
 
         if (searchKernels) {
-          ephemKernels = Inventory::search_for_kernelsets({"base", "mission"}, {"fk", "lsk", "sclk"}); 
+          ephemKernels = Inventory::search_for_kernelsets({"base", mission}, {"fk", "lsk", "sclk"}); 
         }
 
         if (!kernelList.empty()) {
@@ -396,20 +409,8 @@ namespace SpiceQL {
    }
 
 
-   json findMissionKeywords(string key, string mission, bool searchKernels) {
-     json translationKernels = {};
-
-     if (mission != "" && searchKernels) {
-       translationKernels = Inventory::search_for_kernelset(mission, {"iak", "fk", "ik"});
-     }
-
-     KernelSet kset(translationKernels);
-
-     return findKeywords(key);
-   }
-
-
     pair<double, json> doubleSclkToEt(int frameCode, double sclk, string mission, bool useWeb, bool searchKernels, vector<string> kernelList) {
+
         if (useWeb){
             json args = json::object({
                 {"frameCode", frameCode},
@@ -426,7 +427,7 @@ namespace SpiceQL {
         json sclks;
 
         if (searchKernels) {
-            sclks = Inventory::search_for_kernelset(mission, {"lsk", "fk", "sclk"});
+            sclks = Inventory::search_for_kernelsets({"base", mission}, {"lsk", "fk", "sclk"});
         }
 
         if (!kernelList.empty()) {
@@ -451,6 +452,7 @@ namespace SpiceQL {
 
 
     pair<double, json> utcToEt(string utc, bool useWeb, bool searchKernels, vector<string> kernelList) {
+        
         if (useWeb){
             json args = json::object({
                 {"utc", utc},
@@ -462,18 +464,16 @@ namespace SpiceQL {
             return make_pair(result, out["body"]["kernels"]);
         }
 
-        Config conf;
-        conf = conf["base"];
         json lsks = {};
 
         // get lsk kernel
         if (searchKernels) {
-        lsks = conf.getLatest("lsk");
+            lsks = Inventory::search_for_kernelset("base", {"lsk"});
         }
         if (!kernelList.empty()) {
-        json regexk = Inventory::search_for_kernelset_from_regex(kernelList);
-        // merge them into the ephem kernels overwriting anything found in the query
-        merge_json(lsks, regexk);
+            json regexk = Inventory::search_for_kernelset_from_regex(kernelList);
+            // merge them into the ephem kernels overwriting anything found in the query
+            merge_json(lsks, regexk);
         }
         
         KernelSet lsk(lsks);
@@ -488,6 +488,7 @@ namespace SpiceQL {
 
 
     pair<string, json> etToUtc(double et, string format, double precision, bool useWeb, bool searchKernels, vector<string> kernelList) {
+    
         if (useWeb){
             json args = json::object({
                 {"et", et},
@@ -499,20 +500,18 @@ namespace SpiceQL {
             json out = spiceAPIQuery("etToUtc", args);
             string result = out["body"]["return"].get<string>();
             return make_pair(result, out["body"]["kernels"]);
-        }
-
-        Config conf;
-        conf = conf["base"];
+        }   
+       
         json lsks = {};
 
         // get lsk kernel
         if (searchKernels) {
-        lsks = Inventory::search_for_kernelset("base", {"lsk"});
+            lsks = Inventory::search_for_kernelset("base", {"lsk"});
         }
         if (!kernelList.empty()) {
-        json regexk = Inventory::search_for_kernelset_from_regex(kernelList);
-        // merge them into the ephem kernels overwriting anything found in the query
-        merge_json(lsks, regexk);
+            json regexk = Inventory::search_for_kernelset_from_regex(kernelList);
+            // merge them into the ephem kernels overwriting anything found in the query
+            merge_json(lsks, regexk);
         }
 
         KernelSet lsk(lsks);
@@ -527,6 +526,7 @@ namespace SpiceQL {
 
 
     pair<int, json> translateNameToCode(string frame, string mission, bool useWeb, bool searchKernels, vector<string> kernelList) {    
+        
         if (useWeb){
             json args = json::object({
                 {"frame", frame},
@@ -573,6 +573,7 @@ namespace SpiceQL {
 
 
     pair<string, json> translateCodeToName(int frame, string mission, bool useWeb, bool searchKernels, vector<string> kernelList) {
+        
         if (useWeb){
             json args = json::object({
                 {"frame", frame},
@@ -580,7 +581,7 @@ namespace SpiceQL {
                 {"searchKernels", searchKernels},
                 {"kernelList", kernelList}
             });
-            json out = spiceAPIQuery("translateCodeToame", args);
+            json out = spiceAPIQuery("translateCodeToName", args);
             string result = out["body"]["return"].get<string>();
             return make_pair(result, out["body"]["kernels"]);
         }
@@ -618,6 +619,7 @@ namespace SpiceQL {
 
 
     pair<vector<int>, json> getFrameInfo(int frame, string mission, bool useWeb, bool searchKernels, vector<string> kernelList) {
+        
         if (useWeb){
             json args = json::object({
                 {"frame", frame},
@@ -662,6 +664,7 @@ namespace SpiceQL {
 
 
     pair<json, json> getTargetFrameInfo(int targetId, string mission, bool useWeb, bool searchKernels, vector<string> kernelList) {
+        
         if (useWeb){
             json args = json::object({
                 {"targetId", targetId},
@@ -709,6 +712,7 @@ namespace SpiceQL {
 
 
     pair<json, json> findMissionKeywords(string key, string mission, bool useWeb, bool searchKernels, vector<string> kernelList) {
+        
         if (useWeb){
             json args = json::object({
                 {"key", key},
@@ -740,6 +744,7 @@ namespace SpiceQL {
 
 
     pair<json, json> findTargetKeywords(string key, string mission, bool useWeb, bool searchKernels, vector<string> kernelList) {
+        
         if (useWeb){
             json args = json::object({
                 {"key", key},
