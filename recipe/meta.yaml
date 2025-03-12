@@ -34,8 +34,9 @@ build:
 requirements:
 requirements:
   build:
-    - {{ compiler('cxx') }}
-    - {{ stdlib("c") }}
+    - {{ compiler('cxx') }}  # [linux]
+    - libgcc-ng  # [linux]
+    - libstdcxx-ng  # [linux]
     - cmake >=3.14
     - make
     - swig
