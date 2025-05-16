@@ -169,7 +169,12 @@ namespace SpiceQL {
             SPDLOG_TRACE("queryString = {}", queryString);
             std::string encodedString = url_encode(queryString);
             SPDLOG_TRACE("encodedString = {}", encodedString);
-            client.Build()->Get(encodedString).Option(CURLOPT_FOLLOWLOCATION, 1L).AcceptJson().WithCompletion([&](const restincurl::Result& result) {
+            client.Build()->Get(encodedString)
+                    .Option(CURLOPT_FOLLOWLOCATION, 1L)
+                    .Option(CURLOPT_SSL_VERIFYPEER, 0L)
+                    .Option(CURLOPT_TIMEOUT, 180)
+                    .AcceptJson()
+                    .WithCompletion([&](const restincurl::Result& result) {
                 if (result.http_response_code != 200) {
                     SPDLOG_DEBUG("[Failed HTTP request] HTTP Code: {}, Message: {}, Payload: {}", result.http_response_code, result.msg, result.body);
                 }
@@ -178,7 +183,13 @@ namespace SpiceQL {
             }).ExecuteSynchronous();
         } else {
             SPDLOG_TRACE("POST");
-            client.Build()->Post(queryString).Option(CURLOPT_FOLLOWLOCATION, 1L).AcceptJson().WithJson(args.dump()).WithCompletion([&](const restincurl::Result& result) {
+            client.Build()->Post(queryString)
+                    .Option(CURLOPT_FOLLOWLOCATION, 1L)
+                    .Option(CURLOPT_SSL_VERIFYPEER, 0L)
+                    .Option(CURLOPT_TIMEOUT, 180)
+                    .AcceptJson()
+                    .WithJson(args.dump())
+                    .WithCompletion([&](const restincurl::Result& result) {
                 if (result.http_response_code != 200) {
                     SPDLOG_DEBUG("[Failed HTTP request] HTTP Code: {}, Message: {}, Payload: {}", result.http_response_code, result.msg, result.body);
                 }
@@ -774,7 +785,7 @@ namespace SpiceQL {
     }
 
 
-    pair<vector<vector<int>>, json> frameTrace(double et, int initialFrame, string mission, vector<string> ckQualities, bool useWeb, bool searchKernels, vector<string> kernelList) {
+    pair<vector<vector<int>>, json> frameTrace(double et, int initialFrame, string mission, vector<string> ckQualities, vector<string> spkQualities, bool useWeb, bool searchKernels, vector<string> kernelList) {
         checkNaifErrors();
 
         if (useWeb){
@@ -794,7 +805,7 @@ namespace SpiceQL {
         json ephemKernels;
 
         if (searchKernels) {
-            ephemKernels = Inventory::search_for_kernelsets({mission, "base"}, {"sclk", "ck", "pck", "fk", "ik", "lsk", "tspk"}, et, et, ckQualities, {"noquality"});
+            ephemKernels = Inventory::search_for_kernelsets({mission, "base"}, {"sclk", "ck", "pck", "fk", "ik", "iak", "lsk", "spk", "tspk"}, et, et, ckQualities, spkQualities);
         }
 
         if (!kernelList.empty()) {
