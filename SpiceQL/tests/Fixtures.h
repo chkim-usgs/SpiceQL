@@ -1,7 +1,5 @@
 #pragma once
 
-#include <HippoMocks/hippomocks.h>
-
 #include "config.h"
 
 #include "gtest/gtest.h"
@@ -13,15 +11,15 @@ using namespace std;
 using namespace SpiceQL;
 
 
-class TempTestingFiles : public ::testing::Environment {
-  protected:
+class TempTestingFiles : public ::testing::Test {
+  public:
     fs::path tempDir;
 
     void SetUp() override;
     void TearDown() override;
 };
 
-class IsisDataDirectory : public ::testing::Test {
+class IsisDataDirectory : public TempTestingFiles {
   protected: 
     
     string base;
@@ -36,9 +34,8 @@ class IsisDataDirectory : public ::testing::Test {
     void CompareKernelSets(vector<string> kVector, vector<string> expectedSubSet);
 };
 
-class KernelDataDirectories : public ::testing::Test  {
+class KernelDataDirectories : public TempTestingFiles  {
   protected:
-
     vector<string> paths;
 
     void SetUp() override;
@@ -46,7 +43,7 @@ class KernelDataDirectories : public ::testing::Test  {
 };
 
 
-class LroKernelSet : public ::testing::Test  {
+class LroKernelSet : public TempTestingFiles  {
   protected:
     fs::path root;
     string lskPath;
@@ -62,6 +59,7 @@ class LroKernelSet : public ::testing::Test  {
     string fkPath;
     string moonPckPath;
     string basePckPath;  
+    string spqldbPath;
 
     nlohmann::json conf;
 
@@ -69,7 +67,7 @@ class LroKernelSet : public ::testing::Test  {
     void TearDown() override;
 };
 
-class KernelsWithQualities : public ::testing::Test  {
+class KernelsWithQualities : public TempTestingFiles  {
   protected:
     fs::path root;
     string spkPathPredict; 
