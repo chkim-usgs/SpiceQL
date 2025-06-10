@@ -18,7 +18,7 @@ using namespace std;
 
 namespace SpiceQL { 
     namespace Inventory { 
-        json search_for_kernelset(string instrument, vector<string> types, double start_time, double stop_time,  vector<string> ckQualities, vector<string> spkQualities, bool enforce_quality) { 
+        json search_for_kernelset(string instrument, vector<string> types, double start_time, double stop_time,  vector<string> ckQualities, vector<string> spkQualities, bool full_kernel_path, bool enforce_quality) { 
             InventoryImpl impl;
             
             vector<Kernel::Quality> enum_ck_qualities = Kernel::translateQualities(ckQualities);
@@ -29,11 +29,11 @@ namespace SpiceQL {
                 enum_types.push_back(Kernel::translateType(e));
             }
 
-            return impl.search_for_kernelset(instrument, enum_types, start_time, stop_time, enum_ck_qualities, enum_spk_qualities, enforce_quality);
+            return impl.search_for_kernelset(instrument, enum_types, start_time, stop_time, enum_ck_qualities, enum_spk_qualities, full_kernel_path, enforce_quality);
         }
 
         json search_for_kernelsets(vector<string> spiceql_names, vector<string> types, double start_time, double stop_time, 
-                                      vector<string> ckQualities, vector<string> spkQualities, bool enforce_quality, bool overwrite) { 
+                                      vector<string> ckQualities, vector<string> spkQualities, bool full_kernel_path, bool enforce_quality, bool overwrite) { 
             InventoryImpl impl;
               
             vector<Kernel::Quality> enum_ck_qualities = Kernel::translateQualities(ckQualities);
@@ -44,13 +44,13 @@ namespace SpiceQL {
                 enum_types.push_back(Kernel::translateType(e));
             } 
 
-            json kernels = impl.search_for_kernelsets(spiceql_names, enum_types, start_time, stop_time, enum_ck_qualities, enum_spk_qualities, enforce_quality, overwrite);
+            json kernels = impl.search_for_kernelsets(spiceql_names, enum_types, start_time, stop_time, enum_ck_qualities, enum_spk_qualities, full_kernel_path, enforce_quality, overwrite);
             return kernels; 
         }
 
 
 
-        json search_for_kernelset_from_regex(vector<string> list) { 
+        json search_for_kernelset_from_regex(vector<string> list, bool full_kernel_path) { 
             // strings should be formatted similar to the hdf keys e.g. 
             // mro/sclk/name 
             // mro/ck/reconstructed/name 
@@ -121,10 +121,14 @@ namespace SpiceQL {
                     SPDLOG_TRACE("Checking using regex \"{}\": {}", regex, temp);
                     if (regex_search(temp.c_str(), basic_regex(regex, regex_constants::optimize|regex_constants::ECMAScript)) && temp.at(0) != '.' ) {
                         SPDLOG_TRACE("{} matches; adding {} at {}", temp, f, key); 
+                        fs::path f_path = fs::path(f);
+                        if (full_kernel_path) {
+                            f_path = data_dir / f_path;
+                        }
                         if (kernels[kernel_type].is_null())
-                            kernels[kernel_type] = {data_dir / fs::path(f)};
+                            kernels[kernel_type] = {f_path};
                         else 
-                            kernels[kernel_type].push_back(data_dir / fs::path(f));
+                            kernels[kernel_type].push_back(f_path);
 
                         if (kernel_type == "spk")
                             kernels["spk_quality"] = quality; 

@@ -135,8 +135,18 @@ namespace SpiceQL {
     this->m_kernels.merge_patch(kernels);
     
     vector<string> kv = getKernelsAsVector(kernels);
+    fs::path data_dir = getDataDirectory();
 
     for (auto &k : kv) {
+      SPDLOG_TRACE("Initial kernel {}", k);
+
+      if (fs::path(k).is_absolute()) {
+        SPDLOG_TRACE("k is absolute");
+      } else {
+        SPDLOG_TRACE("k is relative");
+        k = data_dir / k;
+      }
+      
       SPDLOG_TRACE("Creating shared kernel {}", k);
       if (!fs::exists(k)) { 
         throw runtime_error("Kernel " + k + " does not exist");
