@@ -412,7 +412,7 @@ async def extractExactCkTimes(
 @app.get("/searchForKernelsets")
 async def searchForKernelsets(
     spiceqlNames: Annotated[list[str], Query()] | str = [],
-    types: Annotated[list[str], Query()] | str = [],
+    types: Annotated[list[str], Query()] | str | None = ["ck", "spk", "tspk", "lsk", "mk", "sclk", "iak", "ik", "fk", "dsk", "pck", "ek"],
     startTime: float = -sys.float_info.max,
     stopTime: float = sys.float_info.max,
     ckQualities: Annotated[list[str], Query()] | str | None = ["smithed", "reconstructed"],
@@ -422,8 +422,8 @@ async def searchForKernelsets(
         types = strToList(types)
         ckQualities = strToList(ckQualities)
         spkQualities = strToList(spkQualities)
-        kernels = pyspiceql.search_for_kernelsets(spiceqlNames, types, startTime, stopTime, ckQualities, spkQualities, False)
-        body = ResultModel(result={}, kernels=kernels)
+        result, kernels = pyspiceql.searchForKernelsets(spiceqlNames, types, startTime, stopTime, ckQualities, spkQualities, False)
+        body = ResultModel(result=result, kernels=kernels)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
         body = ErrorModel(error=str(e))
