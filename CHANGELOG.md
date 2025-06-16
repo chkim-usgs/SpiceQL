@@ -35,6 +35,9 @@ release.
 
 ## [Unreleased]
 
+### Added
+- Added /searchForKernelsets REST endpoint [#76](https://github.com/DOI-USGS/SpiceQL/pull/76)
+
 ### Fixed
 - Fixed default SpiceQL REST URL [#63](https://github.com/DOI-USGS/SpiceQL/pull/63)
 - Added missing db files (dawn, mariner10, near, and rosetta) to CMakeLists.txt [#69](https://github.com/DOI-USGS/SpiceQL/pull/69)
