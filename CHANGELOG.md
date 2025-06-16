@@ -36,7 +36,12 @@ release.
 ## [Unreleased]
 
 ### Added
+<<<<<<< search_endpoint
 - Added /searchForKernelsets REST endpoint [#76](https://github.com/DOI-USGS/SpiceQL/pull/76)
+=======
+
+- Added file creation permission verification before creating database and resolve database creation to specified mission list only if `mlist` is set [#75](https://github.com/DOI-USGS/SpiceQL/pull/75)
+>>>>>>> main
 
 ### Fixed
 - Fixed default SpiceQL REST URL [#63](https://github.com/DOI-USGS/SpiceQL/pull/63)
