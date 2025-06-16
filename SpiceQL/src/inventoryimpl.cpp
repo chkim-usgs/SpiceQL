@@ -142,9 +142,49 @@ namespace SpiceQL {
 
     // create the database 
     if (!fs::exists(db_root) || force_regen) { 
-      // get everything
+      // check that a file can be created in db_root
+      string msg = "";
+      try {
+        string temp_filename = "spiceql.tmp";
+        SPDLOG_TRACE("Creating temporary file [{}] to check create/write permissions at DB path {}.", temp_filename, db_root.string());
+        fs::path temp_path = db_root / temp_filename;
+        std::ofstream temp_file(temp_path.string());
+        if(!temp_file.is_open()) {
+          msg = "Could not create file at DB path [" + db_root.string() + "].";
+        }
+
+        // write to file
+        temp_file << "Writing to file." << std::endl;
+        if (temp_file.fail()) {
+          msg = "Could not write to file at DB path [" + db_root.string() + "].";
+        }
+        temp_file.close();
+        fs::remove(temp_path);
+      } catch (exception &e) {
+        throw runtime_error("MESSAGE: " + msg + ", ERROR: " + string(e.what()) + ".");
+      }
+
       Config config; 
-      json json_kernels = getLatestKernels(config.get()); 
+      json json_kernels = {};
+      // Verify mlist has acceptable mission names
+      vector<string> lowercase_mlist;
+      if (mlist.size() > 0) {
+        for (auto m : mlist) {
+          m = toLower(m);
+          if (!config.contains(m)) {
+            SPDLOG_TRACE("Config does not contain mission: {}", m);
+            throw runtime_error("Mission [" + m + "] is not an acceptable mission name.");
+          }
+          lowercase_mlist.push_back(m);
+        }
+        // Resolve only specified mission list
+        json_kernels = getLatestKernels(config.get(lowercase_mlist));
+      }
+      else {
+        // Resolve everything
+        json_kernels = getLatestKernels(config.get()); 
+      }
+      
 
       // load time kernels for creating the timed kernel DataBase 
       json lsk_json = getLatestKernels(config["base"].getRecursive("lsk")); 
@@ -155,10 +195,6 @@ namespace SpiceQL {
 
       for (auto &[mission, kernels] : json_kernels.items()) {
         SPDLOG_TRACE("MISSION: {}", mission);
-        // if the mission list is populated and the mission is NOT in the list, continue 
-        if(mlist.size() > 0 && std::find(mlist.begin(), mlist.end(), mission) == mlist.end()) { 
-          continue;
-        }
 
         json sclk_json = getLatestKernels(config[mission].getRecursive("sclk")); 
         SPDLOG_TRACE("{} SCLKs: {}", mission, sclk_json.dump(4)); 
