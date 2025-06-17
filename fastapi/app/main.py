@@ -416,13 +416,15 @@ async def searchForKernelsets(
     startTime: float = -sys.float_info.max,
     stopTime: float = sys.float_info.max,
     ckQualities: Annotated[list[str], Query()] | str | None = ["smithed", "reconstructed"],
-    spkQualities: Annotated[list[str], Query()] | str | None = ["smithed", "reconstructed"]):
+    spkQualities: Annotated[list[str], Query()] | str | None = ["smithed", "reconstructed"],
+    fullKernelPath: bool = False,
+    overwrite: bool = False):
     try:
         spiceqlNames = strToList(spiceqlNames)
         types = strToList(types)
         ckQualities = strToList(ckQualities)
         spkQualities = strToList(spkQualities)
-        result, kernels = pyspiceql.searchForKernelsets(spiceqlNames, types, startTime, stopTime, ckQualities, spkQualities, False)
+        result, kernels = pyspiceql.searchForKernelsets(spiceqlNames, types, startTime, stopTime, ckQualities, spkQualities, False, fullKernelPath, overwrite)
         body = ResultModel(result=result, kernels=kernels)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:

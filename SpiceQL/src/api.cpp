@@ -1127,7 +1127,7 @@ namespace SpiceQL {
     }
 
     std::pair<string, nlohmann::json> searchForKernelsets(vector<string> spiceqlNames, vector<string> types, double startTime, double stopTime,
-                                  vector<string> ckQualities, vector<string> spkQualities, bool useWeb) { 
+                                  vector<string> ckQualities, vector<string> spkQualities, bool useWeb, bool fullKernelPath, bool overwrite) { 
       if (useWeb){
         json args = json::object({
             {"spiceqlNames", spiceqlNames},
@@ -1136,13 +1136,14 @@ namespace SpiceQL {
             {"stopTime", stopTime},
             {"ckQualities", ckQualities},
             {"spkQualities", spkQualities},
-            {"fullKernelPath", false}
+            {"fullKernelPath", fullKernelPath},
+            {"overwrite", overwrite}
         });
         json out = spiceAPIQuery("searchForKernelsets", args);
         string kvect = out["body"]["return"];
         return make_pair(kvect, out["body"]["kernels"]);
       }
-      json kernels = Inventory::search_for_kernelsets(spiceqlNames, types, startTime, stopTime, ckQualities, spkQualities);
+      json kernels = Inventory::search_for_kernelsets(spiceqlNames, types, startTime, stopTime, ckQualities, spkQualities, fullKernelPath, overwrite);
       return {"", kernels};
   }
 }
