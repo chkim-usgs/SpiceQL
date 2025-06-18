@@ -109,17 +109,16 @@ TEST_F(LroKernelSet, TestInventorySearchSetsNoOverwrite) {
 }
 
 
-TEST_F(TempTestingFiles, SpiceQLPerformenceInventory) { 
-	 std::ofstream outfile;
-        outfile.open("/home/ec2-user/spiceqltimes_themis.txt", std::ios_base::app); // append instead of overwrite
-    for(int i = 0; i < 1; i++) {
-        const clock_t begin_time = clock();
-	cout << searchForKernelsets({"odyssey", "mars"}, KERNEL_TYPES, 715662878.32324, 715663065.2303).second << endl;
-        float seconds = float( clock () - begin_time ) /  CLOCKS_PER_SEC;
-	cout << seconds << endl;
-	outfile << seconds << endl;
-
-    }
+TEST_F(TempTestingFiles, SpiceQLPerformanceInventory) { 
+	std::ofstream outfile;
+  outfile.open("/home/ec2-user/spiceqltimes_themis.txt", std::ios_base::app); // append instead of overwrite
+  for(int i = 0; i < 1; i++) {
+    const clock_t begin_time = clock();
+    SPDLOG_DEBUG("KERNELS: {}", searchForKernelsets({"odyssey", "mars"}, KERNEL_TYPES, 715662878.32324, 715663065.2303).second.dump());
+    float seconds = float( clock () - begin_time ) /  CLOCKS_PER_SEC;
+    SPDLOG_DEBUG("SECONDS: {}", seconds);
+    outfile << seconds << endl;
+  }
 }
 
 
