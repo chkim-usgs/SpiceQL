@@ -9,6 +9,7 @@ import os
 import pyspiceql
 import logging
 import h5py
+import sys
 
 logger = logging.getLogger('uvicorn.error')
 
@@ -407,6 +408,29 @@ async def extractExactCkTimes(
     except Exception as e:
         body = ErrorModel(error=str(e))
         return ResponseModel(statusCode=500, body=body)
+
+@app.get("/searchForKernelsets")
+async def searchForKernelsets(
+    spiceqlNames: Annotated[list[str], Query()] | str = [],
+    types: Annotated[list[str], Query()] | str | None = ["ck", "spk", "tspk", "lsk", "mk", "sclk", "iak", "ik", "fk", "dsk", "pck", "ek"],
+    startTime: float = -sys.float_info.max,
+    stopTime: float = sys.float_info.max,
+    ckQualities: Annotated[list[str], Query()] | str | None = ["smithed", "reconstructed"],
+    spkQualities: Annotated[list[str], Query()] | str | None = ["smithed", "reconstructed"],
+    fullKernelPath: bool = False,
+    overwrite: bool = False):
+    try:
+        spiceqlNames = strToList(spiceqlNames)
+        types = strToList(types)
+        ckQualities = strToList(ckQualities)
+        spkQualities = strToList(spkQualities)
+        result, kernels = pyspiceql.searchForKernelsets(spiceqlNames, types, startTime, stopTime, ckQualities, spkQualities, False, fullKernelPath, overwrite)
+        body = ResultModel(result=result, kernels=kernels)
+        return ResponseModel(statusCode=200, body=body)
+    except Exception as e:
+        body = ErrorModel(error=str(e))
+        return ResponseModel(statusCode=500, body=body)
+
 
 def calculate_ets(startEts, stopEts, exposureDuration) -> list:
     ets = []

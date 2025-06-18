@@ -1125,4 +1125,25 @@ namespace SpiceQL {
 
         return {cacheTimes, ephemKernels};
     }
+
+    std::pair<string, nlohmann::json> searchForKernelsets(vector<string> spiceqlNames, vector<string> types, double startTime, double stopTime,
+                                  vector<string> ckQualities, vector<string> spkQualities, bool useWeb, bool fullKernelPath, bool overwrite) { 
+      if (useWeb){
+        json args = json::object({
+            {"spiceqlNames", spiceqlNames},
+            {"types", types},
+            {"startTime", startTime},
+            {"stopTime", stopTime},
+            {"ckQualities", ckQualities},
+            {"spkQualities", spkQualities},
+            {"fullKernelPath", fullKernelPath},
+            {"overwrite", overwrite}
+        });
+        json out = spiceAPIQuery("searchForKernelsets", args);
+        string kvect = out["body"]["return"];
+        return make_pair(kvect, out["body"]["kernels"]);
+      }
+      json kernels = Inventory::search_for_kernelsets(spiceqlNames, types, startTime, stopTime, ckQualities, spkQualities, fullKernelPath, overwrite);
+      return {"", kernels};
+  }
 }

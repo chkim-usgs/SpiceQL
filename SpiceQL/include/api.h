@@ -277,4 +277,25 @@ namespace SpiceQL {
      * @returns A list of times
      **/
     std::pair<std::vector<double>, nlohmann::json> extractExactCkTimes(double observStart, double observEnd, int targetFrame, std::string mission, std::vector<std::string> ckQualities={"smithed", "reconstructed"}, bool useWeb=false, bool searchKernels=true, bool fullKernelPath=false, std::vector<std::string> kernelList={});
+
+    /**
+     * @brief Searches for kernels given mission(s) and parameters.
+     *
+     * Searches for kernels given mission(s) and parameters.
+     *
+     * @param spiceqlNames mission names
+     * @param types kernel types
+     * @param startTime Ephemeris time to start searching at
+     * @param stopTime Ephemeris time to stop searching at
+     * @param ckQualities vector of string describing the quality of cks to try and obtain
+     * @param spkQualities vector of string describing the quality of spks to try and obtain
+     * @param useWeb whether to use web SpiceQL
+     * @param fullKernelPath bool if true returns full kernel paths, default returns relative paths
+     * @param overwrite subkernels will take precedent over parent mission kernels if true
+     *
+     * @returns An empty return and list of kernels
+     **/
+    std::pair<std::string, nlohmann::json> searchForKernelsets(std::vector<std::string> spiceqlNames, std::vector<std::string> types={"ck", "spk", "tspk", "lsk", "mk", "sclk", "iak", "ik", "fk", "dsk", "pck", "ek"}, 
+        double startTime=-std::numeric_limits<double>::max(), double stopTime=std::numeric_limits<double>::max(), std::vector<std::string> ckQualities={"smithed", "reconstructed"}, std::vector<std::string> spkQualities={"smithed", "reconstructed"}, 
+        bool useWeb=false, bool fullKernelPath=false, bool overwrite=false);
 }

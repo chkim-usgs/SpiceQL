@@ -7,6 +7,7 @@
 
 #include "inventory.h"
 #include "inventoryimpl.h"
+#include "api.h"
 
 #include <fstream>
 #include <spdlog/spdlog.h>
@@ -99,7 +100,8 @@ TEST_F(LroKernelSet, TestInventorySearch) {
 
 TEST_F(LroKernelSet, TestInventorySearchSetsNoOverwrite) {
   // do a time query
-  nlohmann::json kernels = Inventory::search_for_kernelsets({"moon", "base"}, {"pck"}, 110000000, 140000001, {"reconstructed"}, {"reconstructed"}, false, false, false);
+  pair<string, nlohmann::json> result = searchForKernelsets({"moon", "base"}, {"pck"}, 110000000, 140000001, {"reconstructed"}, {"reconstructed"}, false, false);
+  nlohmann::json kernels = result.second;
   SPDLOG_DEBUG("TEST KERNELS: {}", kernels.dump(4));
   EXPECT_EQ(kernels["pck"].size(), 2);
   EXPECT_EQ(fs::path(kernels["pck"][0].get<string>()).filename(), "moon_080317.tf");
@@ -107,26 +109,26 @@ TEST_F(LroKernelSet, TestInventorySearchSetsNoOverwrite) {
 }
 
 
-TEST_F(TempTestingFiles, SpiceQLPerformenceInventory) { 
-	 std::ofstream outfile;
-        outfile.open("/home/ec2-user/spiceqltimes_themis.txt", std::ios_base::app); // append instead of overwrite
-    for(int i = 0; i < 1; i++) {
-        const clock_t begin_time = clock();
-	cout << Inventory::search_for_kernelsets({"odyssey", "mars"}, KERNEL_TYPES, 715662878.32324, 715663065.2303) << endl;
-        float seconds = float( clock () - begin_time ) /  CLOCKS_PER_SEC;
-	cout << seconds << endl;
-	outfile << seconds << endl;
-
-    }
+TEST_F(TempTestingFiles, SpiceQLPerformanceInventory) { 
+	std::ofstream outfile;
+  outfile.open("/home/ec2-user/spiceqltimes_themis.txt", std::ios_base::app); // append instead of overwrite
+  for(int i = 0; i < 1; i++) {
+    const clock_t begin_time = clock();
+    SPDLOG_DEBUG("KERNELS: {}", searchForKernelsets({"odyssey", "mars"}, KERNEL_TYPES, 715662878.32324, 715663065.2303).second.dump());
+    float seconds = float( clock () - begin_time ) /  CLOCKS_PER_SEC;
+    SPDLOG_DEBUG("SECONDS: {}", seconds);
+    outfile << seconds << endl;
+  }
 }
 
 
 TEST_F(LroKernelSet, TestInventorySearchSetsOverwrite) {
   // do a time query
-  nlohmann::json kernels = Inventory::search_for_kernelsets({"moon", "base"}, {"pck"}, 110000000, 140000001, {"reconstructed"}, {"reconstructed"}, false, false, true);
+  pair<string, nlohmann::json> result = searchForKernelsets({"moon", "base"}, {"pck"}, 110000000, 140000001, {"reconstructed"}, {"reconstructed"}, false, false, true);
+  nlohmann::json kernels = result.second;
   SPDLOG_DEBUG("TEST KERNELS: {}", kernels.dump(4));
-  EXPECT_EQ(kernels["pck"].size(), 1);
-  EXPECT_EQ(fs::path(kernels["pck"][0].get<string>()).filename(), "pck00009.tpc");
+  EXPECT_EQ(kernels["pck"].size(), 2);
+  EXPECT_EQ(fs::path(kernels["pck"][1].get<string>()).filename(), "pck00009.tpc");
 }
 
 

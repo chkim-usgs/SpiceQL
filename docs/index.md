@@ -54,12 +54,12 @@ SPICEQL_LOG_LEVEL=INFO python -c "import pyspiceql; pyspiceql.create_database()"
     import pyspiceql as psql 
 
     # search for a kernel set
-    kernels = psql.search_for_kernelsets(["odyssey", "mars"], ["sclk", "spk", "tspk", "ck"], 715662878.32324, 715663065.2303)
+    kernels = psql.searchForKernelsets(["odyssey", "mars"], ["sclk", "spk", "tspk", "ck"], 715662878.32324, 715663065.2303)
     print(kernels)
 
 
     # Make a query and it will return the kernels used 
-    orientations, kernels = spql.getTargetOrientations([690201375.8323615], -74000, -74690, "ctx", searchKernels=True) 
+    orientations, kernels = psql.getTargetOrientations([690201375.8323615], -74000, -74690, "ctx", searchKernels=True) 
     print(kernels)
     print(orientations)
     ```
@@ -68,11 +68,10 @@ SPICEQL_LOG_LEVEL=INFO python -c "import pyspiceql; pyspiceql.create_database()"
 
     ```C++ 
     #include <spiceql/spiceql.h>
-    #include <spiceql/inventory.h>
     #include <nlohmann/json.hpp>
     
     // search for a kernel set
-    nlohmann::json kernels1 = SpiceQL::Inventory::search_for_kernelsets({"odyssey", "mars"}, {"sclk", "spk", "tspk", "ck"}, 715662878.32324, 715663065.2303);
+    nlohmann::json kernels1 = SpiceQL::searchForKernelsets({"odyssey", "mars"}, {"sclk", "spk", "tspk", "ck"}, 715662878.32324, 715663065.2303);
     std::cout << kernels1.dump(2) << std::endl;
     
     // Make a query and it will return the kernels used 
