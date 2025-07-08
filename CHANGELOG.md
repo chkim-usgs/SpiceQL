@@ -35,8 +35,12 @@ release.
 
 ## [Unreleased]
 
+## 1.2.1
+
+### Added
+- Added /getExactTargetOrientations REST endpoint [#82](https://github.com/DOI-USGS/SpiceQL/pull/82)
+
 ### Changed
-- Added `limitCk` and `limitSpk` query params to limit the number of CK and SPK files returned [#82](https://github.com/DOI-USGS/SpiceQL/pull/82)
 - Turned `limitQuality` into `limitCk` and `limitSpk` query params [#80](https://github.com/DOI-USGS/SpiceQL/pull/80)
 
 ## 1.2.0
