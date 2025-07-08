@@ -348,6 +348,49 @@ namespace SpiceQL {
     }
 
 
+    pair<vector<vector<double>>, json> getExactTargetOrientations(double startEt, double stopEt, int toFrame, int refFrame, string mission, vector<string> ckQualities, bool useWeb, bool searchKernels, bool fullKernelPath, int limitCk, int limitSpk, vector<string> kernelList) {
+        SPDLOG_TRACE("Calling getExactTargetOrientations with startEt={}, stopEt={}, toFrame={}, refFrame={}, mission={}, ckQualities.size()={}, useWeb={}, searchKernels={}, kernelList.size()={}", 
+            startEt, stopEt, toFrame, refFrame, mission, ckQualities.size(), useWeb, searchKernels, kernelList.size());
+        
+        if (useWeb){
+            json args = json::object({
+                {"startEt", startEt},
+                {"stopEt", stopEt},
+                {"toFrame", toFrame},
+                {"refFrame", refFrame},
+                {"mission", mission},
+                {"ckQualities", ckQualities},
+                {"searchKernels", searchKernels},
+                {"fullKernelPath", fullKernelPath},
+                {"limitCk", limitCk},
+                {"limitSpk", limitSpk},
+                {"kernelList", kernelList}
+            });
+            json out = spiceAPIQuery("getTargetOrientations", args);
+            vector<vector<double>> kvect = json2DFloatArrayTo2DVector(out["body"]["return"]);
+            return make_pair(kvect, out["body"]["kernels"]);
+        }
+        
+        // force searchKernels and useWeb to false
+        auto [exactCkTimes, kernels1] = extractExactCkTimes(startEt, stopEt, toFrame, mission, ckQualities, false, searchKernels, fullKernelPath, 1, 1, kernelList);
+        SPDLOG_DEBUG("number of exact ck times = {}", exactCkTimes.size());
+        auto [orientations, kernels2] = getTargetOrientations(exactCkTimes, toFrame, refFrame, mission, ckQualities, false, searchKernels, fullKernelPath, limitCk, limitSpk, kernelList);
+        json ephemKernels = merge_json(kernels1, kernels2);
+
+        // Merge the two vectors into a new vector of format t,x,y,z,w
+        vector<vector<double>> ephems;
+        size_t n = std::min(exactCkTimes.size(), orientations.size());
+        for (size_t i = 0; i < n; ++i) {
+            if (orientations[i].size() >= 4) {
+                vector<double> merged = {exactCkTimes[i], orientations[i][0], orientations[i][1], orientations[i][2], orientations[i][3]};
+                ephems.push_back(merged);
+            }
+        }
+
+        return {ephems, ephemKernels};
+    }
+
+
     pair<double, json> strSclkToEt(int frameCode, string sclk, string mission, bool useWeb, bool searchKernels, bool fullKernelPath, int limitCk, int limitSpk, vector<string> kernelList) {
         SPDLOG_TRACE("calling strSclkToEt({}, {}, {}, {}, {}, {})", frameCode, sclk, mission, useWeb, searchKernels, kernelList.size());
 
@@ -1032,6 +1075,7 @@ namespace SpiceQL {
         checkNaifErrors();
         ktotal_c("ck", (SpiceInt *)&count);
 
+        SPDLOG_DEBUG("CK count = {}", count);
         if (count > 1) {
             std::string msg = "Unable to get exact CK record times when more than 1 CK is loaded, Aborting";
             throw std::runtime_error(msg);
