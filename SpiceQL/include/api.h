@@ -362,17 +362,20 @@ namespace SpiceQL {
 
 
     /**
-    * @brief returns kernel values for a specific mission in the form of a json
+    * @brief returns kernel text keyword values for a specific mission as json
     *
-    *  Takes in a kernel key and returns the value associated with the inputted mission as a json
-    * 
-    * @param key key - Kernel to get values from 
-    * @param mission mission name
+    *  Takes in a kernel key from iaks, iks, and fks and returns the value associated with the input mission (e.g. LRO, MRO, sun etc) as json. 
+    *  findMissionKeywords is a aggregation of cspice's gnpool_c, gcpool_c, gdpool_c, and gipool_c. Input key supports wildcards, e.g. "LRO_*", "*_BORESIGHT_SAMPLE", or "*-8600*". 
+    *  
+    * @param key kernel text keyword to look for 
+    * @param mission spiceql name to search for (e.g. LRO, MRO, sun etc)
     * @param fullKernelPath bool if true returns full kernel paths, default returns relative paths
     * @param limitCk int number of cks to limit to, default is -1 to retrieve all
     * @param limitSpk int number of spks to limit to, default is 1 to retrieve only one
     * @param searchKernels bool Whether to search the kernels for the user
-    * @returns json of values
+    * @param kernelList vector of additional kernels to load 
+    * 
+    * @returns json object of key value pairs
     **/
     std::pair<nlohmann::json, nlohmann::json> findMissionKeywords(
         std::string key, 
@@ -388,7 +391,8 @@ namespace SpiceQL {
     /**
     * @brief returns Target values in the form of a vector
     *
-    *  Takes in a target and key and returns the value associated in the form of vector.
+    *  Takes in a target and key and returns the value associated in the form of vector from PCKs.
+    *  findTargetKeywords is a aggregation of cspice's gnpool_c, gcpool_c, gdpool_c, and gipool_c. Input key supports wildcards, e.g. "*_RADII" or "*-8600*".
     *  Note: This function is mainly for obtaining target keywords. For obtaining other values, use findMissionKeywords.
     * 
     * @param key keyword for desired values
@@ -399,7 +403,7 @@ namespace SpiceQL {
     * @param limitSpk int number of spks to limit to, default is 1 to retrieve only one
     * @param kernelList vector<string> vector of additional kernels to load 
     *
-    * @returns vector of values
+    * @returns json object of key value pairs
     **/
     std::pair<nlohmann::json, nlohmann::json> findTargetKeywords(
         std::string key, 
@@ -452,7 +456,7 @@ namespace SpiceQL {
      * with segments in a CK file. The times returned are all times assocaited with
      * concrete CK segment times with no interpolation. This function is limited to 
      * loading one CK file at a time, if a time window covers multiple CK files, 
-     * the function will throw an error.
+     * the function will throw an error. For this reason, limitCK is set to 1 by default.
      *
      * @param observStart Ephemeris time to start searching at
      * @param observEnd Ephemeris time to stop searching at
