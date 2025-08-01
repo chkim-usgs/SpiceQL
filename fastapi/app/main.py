@@ -54,7 +54,7 @@ async def getTargetStates(
     observer: Annotated[ObserverParam, Depends()],
     frame: Annotated[FrameStrParam, Depends()],
     abcorr: Annotated[AbcorrParam, Depends()],
-    ets: Annotated[EtsParams, Depends()],
+    ets: Annotated[EtsParam, Depends()],
     mission: Annotated[MissionParam, Depends()],
     commonParams: Annotated[CommonParams, Depends()],
     ckQualities: Annotated[CkQualitiesParam, Depends()],
@@ -115,7 +115,7 @@ async def getTargetOrientations(
     toFrame: Annotated[ToFrameParam, Depends()],
     refFrame: Annotated[RefFrameParam, Depends()],
     mission: Annotated[MissionParam, Depends()],
-    ets: Annotated[EtsParams, Depends()],
+    ets: Annotated[EtsParam, Depends()],
     commonParams: Annotated[CommonParams, Depends()],
     ckQualities: Annotated[CkQualitiesParam, Depends()]):
     try:
@@ -440,6 +440,7 @@ async def getExactTargetOrientations(
     stopEt: Annotated[StopEtParam, Depends()],
     toFrame: Annotated[ToFrameParam, Depends()],
     refFrame: Annotated[RefFrameParam, Depends()],
+    exactCkFrame: Annotated[ExactCkFrameParam, Depends()],
     mission: Annotated[MissionParam, Depends()],
     ckQualities: Annotated[CkQualitiesParam, Depends()],
     commonParams: Annotated[CommonParams, Depends()]):
@@ -449,6 +450,7 @@ async def getExactTargetOrientations(
             stopEt.value, 
             toFrame.value, 
             refFrame.value, 
+            exactCkFrame.value,
             mission.value, 
             ckQualities.value, 
             False, 
