@@ -13,6 +13,9 @@ logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)
 
 #region DECORATOR
+"""
+Decorator that checks and validates any list-like inputs and ets calculations.
+"""
 
 def validate_params(init_func):
     @functools.wraps(init_func)
@@ -32,7 +35,7 @@ def validate_params(init_func):
             # Check if variable name is 'ets'
             if var_name == 'ets':
                 ets = var_value
-                ets = verify_ets(ets, self.__dict__['startEts'], self.__dict__['stopEts'], self.__dict__['exposureDuration'])
+                ets = verify_ets(ets, self.__dict__['startEt'], self.__dict__['stopEt'], self.__dict__['numRecords'])
                 setattr(self, var_name, ets)
         
         logger.debug(f"--- Validation successful for instance of {self.__class__.__name__} ---")
@@ -43,50 +46,18 @@ def validate_params(init_func):
 
 
 #region UTILS
+"""
+Utilities for param validation.
+"""
 
-def calculate_ets(startEts, stopEts, exposureDuration) -> list:
-    ets = []
-    etsCalculationParams = [startEts, stopEts, exposureDuration]
-    if all(v is not None for v in etsCalculationParams):
-        if (all(isinstance(i, list) for i in etsCalculationParams)
-            and (len(startEts) == len (stopEts) == len(exposureDuration))):
-            ets = interpolate_times(startEts, stopEts, exposureDuration)
-        elif (all(isinstance(i, str) for i in etsCalculationParams)
-                or all(isinstance(i, float) for i in etsCalculationParams)):
-            startEts = literal_eval(startEts)
-            stopEts = literal_eval(stopEts)
-            exposureDuration = literal_eval(exposureDuration)
-            etsCalculationParams = [startEts, stopEts, exposureDuration]
-            if all(isinstance(i, float) for i in etsCalculationParams):
-                etsNpArray = np.arange(startEts, stopEts, exposureDuration)
-                # If ets is a single value, np.arange yields an empty array
-                ets = list(etsNpArray)
-            elif (all(isinstance(i, tuple) for i in etsCalculationParams)
-                    or all(isinstance(i, list) for i in etsCalculationParams)):
-                ets = interpolate_times(startEts, stopEts, exposureDuration)
-        else:
-            raise Exception("Params startEts, stopEts, and exposureDuration must be either all floats or lists of the same length.")
-    else:
-        raise Exception("Verify that either params ets or startEts, stopEts, and exposureDuration are being passed correctly.")
-    return ets
-
-def interpolate_times(start_times, stop_times, exposure_times) -> np.ndarray:
-    # Convert lists to numpy arrays for easy manipulation
-    start_times = np.asarray(start_times)
-    exposure_times = np.asarray(exposure_times)
-    stop_times = np.asarray(stop_times)
-    times = []
-    for start, stop, exposure_time in zip(start_times, stop_times, exposure_times):
-        interp_times = np.arange(start, stop, exposure_time, dtype=float)
-        times.extend(interp_times.tolist())
-    logging.info(f"interpolated times = {times}")
-    return np.asarray(times)
+def calculate_ets(startEt, stopEt, numRecords) -> list:
+    return np.linspace(startEt, stopEt, numRecords)
 
 def strToList(value: str) -> list:
     # Converts a string into a list or its literal value
     if value is not None:
         if isinstance(value, str):
-            value = value.replace("[", "").replace("]", "").split(",")
+            value = value.replace("[", "").replace("]", "").replace("\"", "").replace("\'", "").replace(" ", "").split(",")
         else:
             try:
                 iter(value)
@@ -110,7 +81,11 @@ def verify_ets(ets, startEts, stopEts, exposureDuration):
 
 #endregion
 
+
 #region MODELS
+"""
+Models using Pydantic's BaseModel format, mainly for POST endpoints.
+"""
 
 class MessageItem(BaseModel):
     message: str
@@ -133,9 +108,9 @@ class TargetStatesRequestModel(BaseModel):
     abcorr: str
     mission: str
     ets: Annotated[list[float], Query()] | float | str | None = None
-    startEts: Annotated[list[float], Query()] | float | str | None = None
-    stopEts: Annotated[list[float], Query()] | float | str | None = None
-    exposureDuration: Annotated[list[float], Query()] | float | str | None = None
+    startEts: float | None = None
+    stopEts: float | None = None
+    numRecords: int | None = None
     ckQualities: Annotated[list[str], Query()] | str | None = ["smithed", "reconstructed"]
     spkQualities: Annotated[list[str], Query()] | str | None = ["smithed", "reconstructed"]
     kernelList: Annotated[list[str], Query()] | str | None = []
@@ -150,14 +125,37 @@ class TargetStatesRequestModel(BaseModel):
         """Strips leading/trailing whitespace from the name."""
         startEts = info.data.get('startEts') 
         stopEts = info.data.get('stopEts') 
-        exposureDuration = info.data.get('exposureDuration') 
-        ets = verify_ets(ets, startEts, stopEts, exposureDuration)
-        return ets  # Return original if not a string, let Pydantic handle type error
+        numRecords = info.data.get('numRecords') 
+        ets = verify_ets(ets, startEts, stopEts, numRecords)
+        return ets
 
 #endregion
 
 
 #region PARAMS
+"""
+Query parameters for GET endpoints.
+Alphabetical order.
+"""
+
+class AbcorrParam():
+    def __init__(
+            self,
+            abcorr: Annotated[str, Query(
+                description="Abcorr.",
+                openapi_examples={
+                    "empty": {
+                        "summary": "Default",
+                        "value": None
+                    },
+                    "ctx": {
+                        "summary": "MRO CTX Example",
+                        "value": "LT+S"
+                    }
+                }
+            )]):
+        self.value = abcorr
+
 
 class CommonParams():
     @validate_params
@@ -248,276 +246,6 @@ class CkQualitiesParam():
         self.value = ckQualities
 
 
-class SpkQualitiesParam():
-    @validate_params
-    def __init__(
-            self,
-            spkQualities: Annotated[list[str], Query(
-                description="List of SPK qualities.",
-                openapi_examples={
-                    "smithed": {
-                        "summary": "Only smithed",
-                        "value": ["smithed"]
-                    },
-                    "reconstructed": {
-                        "summary": "Only reconstructed",
-                        "value": ["reconstructed"]
-                    },
-                    "all": {
-                        "summary": "All quality types",
-                        "value": ["smithed", "reconstructed", "predicted", "nadir", "noquality"]
-                    }
-                }
-            )] = ["smithed", "reconstructed"]):
-        self.value = spkQualities
-
-
-class MissionParam():
-    @validate_params
-    def __init__(
-            self,
-            mission: Annotated[str, Query(
-                description="Mission name.",
-                openapi_examples={
-                    "empty": {
-                        "summary": "Default",
-                        "value": None
-                    },
-                    "ctx": {
-                        "summary": "MRO CTX Example",
-                        "value": "ctx"
-                    }
-                }
-            )]):
-        self.value = mission
-
-
-class EtsParams():
-    @validate_params
-    def __init__(
-            self,
-            ets: Annotated[list[float], Query(
-                description="Ephemeris times.",
-                openapi_examples={
-                    "empty": {
-                        "summary": "No ephemeris time range, using start/stop ETs and exposure duration instead.",
-                        "value": None
-                    },
-                    "ctx": {
-                        "summary": "MRO CTX Example",
-                        "value": [690201375.8323615, 690201389.2866975]
-                    }
-                }
-            )] = None,
-            startEts: Annotated[list[float], Query(
-                description="Start ephemeris times.",
-                openapi_examples={
-                    "empty": {
-                        "summary": "No startEts, using 'ets' param instead.",
-                        "value": None
-                    }
-                }
-            )] = None,
-            stopEts: Annotated[list[float], Query(
-                description="Stop ephemeris times.",
-                openapi_examples={
-                    "empty": {
-                        "summary": "No stopEts, using 'ets' param instead.",
-                        "value": None
-                    }
-                }
-            )] = None,
-            exposureDuration: Annotated[list[float], Query(
-                description="Exposure duration.",
-                openapi_examples={
-                    "empty": {
-                        "summary": "No exposureDuration, using 'ets' param instead.",
-                        "value": None
-                    }
-                }
-            )] = None):
-        self.value = ets
-        
-
-class TargetParam():
-    def __init__(
-            self,
-            target: Annotated[str, Query(
-                description="Target name.",
-                openapi_examples={
-                    "empty": {
-                        "summary": "Default",
-                        "value": None
-                    },
-                    "ctx": {
-                        "summary": "MRO CTX Example",
-                        "value": "sun"
-                    }
-                }
-            )]):
-        self.value = target
-
-
-class ObserverParam():
-    def __init__(
-            self,
-            observer: Annotated[str, Query(
-                description="Observer name.",
-                openapi_examples={
-                    "empty": {
-                        "summary": "Default",
-                        "value": None
-                    },
-                    "ctx": {
-                        "summary": "MRO CTX Example",
-                        "value": "mars"
-                    }
-                }
-            )]):
-        self.value = observer
-
-
-class FrameStrParam():
-    def __init__(
-            self,
-            frame: Annotated[str, Query(
-                description="Frame code.",
-                openapi_examples={
-                    "empty": {
-                        "summary": "Default",
-                        "value": None
-                    },
-                    "ctx1": {
-                        "summary": "MRO CTX Example",
-                        "value": "IAU_MARS"
-                    },
-                    "ctx2": {
-                        "summary": "MRO CTX Example",
-                        "value": "IAU_MARS"
-                    }
-                }
-            )]):
-        self.value = frame
-
-
-class AbcorrParam():
-    def __init__(
-            self,
-            abcorr: Annotated[str, Query(
-                description="Abcorr.",
-                openapi_examples={
-                    "empty": {
-                        "summary": "Default",
-                        "value": None
-                    },
-                    "ctx": {
-                        "summary": "MRO CTX Example",
-                        "value": "LT+S"
-                    }
-                }
-            )]):
-        self.value = abcorr
-
-
-class ToFrameParam():
-    def __init__(
-            self,
-            toFrame: Annotated[int, Query(
-                description="Target frame code.",
-                openapi_examples={
-                    "empty": {
-                        "summary": "Default",
-                        "value": None
-                    },
-                    "ctx": {
-                        "summary": "MRO CTX Example",
-                        "value": "-74000"
-                    }
-                }
-            )]):
-        self.value = toFrame
-
-
-class RefFrameParam():
-    def __init__(
-            self,
-            refFrame: Annotated[int, Query(
-                description="Reference frame code.",
-                openapi_examples={
-                    "empty": {
-                        "summary": "Default",
-                        "value": None
-                    },
-                    "ctx": {
-                        "summary": "MRO CTX Example",
-                        "value": "-74690"
-                    }
-                }
-            )]):
-        self.value = refFrame
-
-
-class FrameCodeParam():
-    def __init__(
-            self,
-            frameCode: Annotated[int, Query(
-                description="Frame code",
-                openapi_examples={
-                    "empty": {
-                        "summary": "Default",
-                        "value": None
-                    },
-                    "ctx": {
-                        "summary": "MRO CTX Example",
-                        "value": -74
-                    },
-                    "lro": {
-                        "summary": "LRO Example",
-                        "value": -85
-                    }
-                }
-            )]):
-        self.value = frameCode
-
-
-class SclkStrParam():
-    def __init__(
-            self,
-            sclk: Annotated[str, Query(
-                description="Spacecraft clock time as string",
-                openapi_examples={
-                    "empty": {
-                        "summary": "Default",
-                        "value": None
-                    },
-                    "ctx": {
-                        "summary": "MRO CTX Example",
-                        "value": "1321396563:036"
-                    }
-                }
-            )]):
-        self.value = sclk
-
-
-class SclkDblParam():
-    def __init__(
-            self,
-            sclk: Annotated[float, Query(
-                description="Spacecraft clock time as double or float",
-                openapi_examples={
-                    "empty": {
-                        "summary": "Default",
-                        "value": None
-                    },
-                    "ctx": {
-                        "summary": "LRO Example",
-                        "value": 922997380.174174
-                    }
-                }
-            )]):
-        self.value = sclk
-
-
 class EtParam():
     def __init__(
             self,
@@ -545,25 +273,71 @@ class EtParam():
         self.value = et 
 
 
-class UtcParam():
+class EtsParam():
     @validate_params
     def __init__(
             self,
-            utc: Annotated[str, Query(
-                description="UTC Time.",
+            ets: Annotated[list[float], Query(
+                description="Ephemeris times.",
+                openapi_examples={
+                    "empty": {
+                        "summary": "No ephemeris time range, using start/stop ETs and exposure duration instead.",
+                        "value": None
+                    },
+                    "ctx": {
+                        "summary": "MRO CTX Example",
+                        "value": [690201375.8323615, 690201389.2866975]
+                    }
+                }
+            )] = None,
+            startEt: Annotated[float, Query(
+                description="Start ephemeris times.",
+                openapi_examples={
+                    "empty": {
+                        "summary": "No startEt, using 'ets' param instead.",
+                        "value": None
+                    }
+                }
+            )] = None,
+            stopEt: Annotated[float, Query(
+                description="Stop ephemeris times.",
+                openapi_examples={
+                    "empty": {
+                        "summary": "No stopEt, using 'ets' param instead.",
+                        "value": None
+                    }
+                }
+            )] = None,
+            numRecords: Annotated[int, Query(
+                description="Number of records.",
+                openapi_examples={
+                    "empty": {
+                        "summary": "No numRecords, using 'ets' param instead.",
+                        "value": None
+                    }
+                }
+            )] = None):
+        self.value = ets
+
+
+class ExactCkFrameParam():
+    def __init__(
+            self,
+            exactCkFrame: Annotated[int, Query(
+                description="Exact CK frame code.",
                 openapi_examples={
                     "empty": {
                         "summary": "Default",
                         "value": None
                     },
-                    "example1": {
-                        "summary": "Example 1",
-                        "value": "1971-08-04T16:28:24.9159358"
+                    "ctx": {
+                        "summary": "MRO CTX Example",
+                        "value": "-74690"
                     }
                 }
             )]):
-        self.value = utc   
-        
+        self.value = exactCkFrame
+
 
 class FormatParam():
     @validate_params
@@ -585,24 +359,27 @@ class FormatParam():
         self.value = format 
 
 
-class PrecisionParam():
-    @validate_params
+class FrameCodeParam():
     def __init__(
             self,
-            precision: Annotated[float, Query(
-                description="Precision.",
+            frameCode: Annotated[int, Query(
+                description="Frame code",
                 openapi_examples={
                     "empty": {
                         "summary": "Default",
                         "value": None
                     },
-                    "example1": {
-                        "summary": "10",
-                        "value": 10
+                    "ctx": {
+                        "summary": "MRO CTX Example",
+                        "value": -74
+                    },
+                    "lro": {
+                        "summary": "LRO Example",
+                        "value": -85
                     }
                 }
             )]):
-        self.value = precision  
+        self.value = frameCode
 
 
 class FrameIntParam():
@@ -625,12 +402,35 @@ class FrameIntParam():
         self.value = frame
 
 
-class TargetIdParam():
+class FrameStrParam():
+    def __init__(
+            self,
+            frame: Annotated[str, Query(
+                description="Frame code.",
+                openapi_examples={
+                    "empty": {
+                        "summary": "Default",
+                        "value": None
+                    },
+                    "ctx1": {
+                        "summary": "MRO CTX Example",
+                        "value": "IAU_MARS"
+                    },
+                    "ctx2": {
+                        "summary": "MRO CTX Example",
+                        "value": "IAU_MARS"
+                    }
+                }
+            )]):
+        self.value = frame
+
+
+class InitialFrameParam():
     @validate_params
     def __init__(
             self,
-            targetId: Annotated[int, Query(
-                description="Target ID code",
+            initialFrame: Annotated[int, Query(
+                description="Initial frame code",
                 openapi_examples={
                     "empty": {
                         "summary": "Default",
@@ -638,11 +438,11 @@ class TargetIdParam():
                     },
                     "ctx": {
                         "summary": "MRO CTX Example",
-                        "value": 499
+                        "value": -74021
                     }
                 }
             )]):
-        self.value = targetId
+        self.value = initialFrame
 
 
 class KeyParam():
@@ -669,12 +469,32 @@ class KeyParam():
         self.value = key
 
 
-class InitialFrameParam():
+class LimitCkOneParam():
     @validate_params
     def __init__(
             self,
-            initialFrame: Annotated[int, Query(
-                description="Initial frame code",
+            limitCk: Annotated[int, Query(
+                description="Limit CK kernels.",
+                openapi_examples={
+                    "one": {
+                        "summary": "Return one CK kernel, if possible.",
+                        "value": 1
+                    },
+                    "five": {
+                        "summary": "Return five CK kernels, if possible.",
+                        "value": 5
+                    }
+                }
+            )] = 1):
+        self.value = limitCk
+
+
+class MissionParam():
+    @validate_params
+    def __init__(
+            self,
+            mission: Annotated[str, Query(
+                description="Mission name.",
                 openapi_examples={
                     "empty": {
                         "summary": "Default",
@@ -682,19 +502,18 @@ class InitialFrameParam():
                     },
                     "ctx": {
                         "summary": "MRO CTX Example",
-                        "value": -74021
+                        "value": "ctx"
                     }
                 }
             )]):
-        self.value = initialFrame
+        self.value = mission
 
 
-class ObservStartParam():
-    @validate_params
+class ObserverParam():
     def __init__(
             self,
-            observStart: Annotated[float, Query(
-                description="Observed start ephemeris time",
+            observer: Annotated[str, Query(
+                description="Observer name.",
                 openapi_examples={
                     "empty": {
                         "summary": "Default",
@@ -702,11 +521,11 @@ class ObservStartParam():
                     },
                     "ctx": {
                         "summary": "MRO CTX Example",
-                        "value": 690201382.5595295
+                        "value": "mars"
                     }
                 }
             )]):
-        self.value = observStart
+        self.value = observer
 
 
 class ObservEndParam():
@@ -729,12 +548,12 @@ class ObservEndParam():
         self.value = observEnd
 
 
-class TargetFrameParam():
+class ObservStartParam():
     @validate_params
     def __init__(
             self,
-            targetFrame: Annotated[int, Query(
-                description="Target frame code",
+            observStart: Annotated[float, Query(
+                description="Observed start ephemeris time",
                 openapi_examples={
                     "empty": {
                         "summary": "Default",
@@ -742,32 +561,149 @@ class TargetFrameParam():
                     },
                     "ctx": {
                         "summary": "MRO CTX Example",
-                        "value": -74021
+                        "value": 690201382.5595295
                     }
                 }
             )]):
-        self.value = targetFrame
+        self.value = observStart
 
 
-class LimitCkOneParam():
+class OverwriteParam():
     @validate_params
     def __init__(
             self,
-            limitCk: Annotated[int, Query(
-                description="Limit CK kernels.",
+            overwrite: Annotated[bool, Query(
+                description="Whether to remote duplicate kernel matches.",
                 openapi_examples={
-                    "one": {
-                        "summary": "Return one CK kernel, if possible.",
-                        "value": 1
-                    },
-                    "five": {
-                        "summary": "Return five CK kernels, if possible.",
-                        "value": 5
+                    "default": {
+                        "summary": "Default",
+                        "value": False
                     }
                 }
-            )] = 1):
-        self.value = limitCk
+            )] = False):
+        self.value = overwrite
 
+
+class PrecisionParam():
+    @validate_params
+    def __init__(
+            self,
+            precision: Annotated[float, Query(
+                description="Precision.",
+                openapi_examples={
+                    "empty": {
+                        "summary": "Default",
+                        "value": None
+                    },
+                    "example1": {
+                        "summary": "10",
+                        "value": 10
+                    }
+                }
+            )]):
+        self.value = precision  
+
+
+class RefFrameParam():
+    def __init__(
+            self,
+            refFrame: Annotated[int, Query(
+                description="Reference frame code.",
+                openapi_examples={
+                    "empty": {
+                        "summary": "Default",
+                        "value": None
+                    },
+                    "ctx": {
+                        "summary": "MRO CTX Example",
+                        "value": "-74690"
+                    }
+                }
+            )]):
+        self.value = refFrame
+
+
+class SclkDblParam():
+    def __init__(
+            self,
+            sclk: Annotated[float, Query(
+                description="Spacecraft clock time as double or float",
+                openapi_examples={
+                    "empty": {
+                        "summary": "Default",
+                        "value": None
+                    },
+                    "ctx": {
+                        "summary": "LRO Example",
+                        "value": 922997380.174174
+                    }
+                }
+            )]):
+        self.value = sclk
+
+
+class SclkStrParam():
+    def __init__(
+            self,
+            sclk: Annotated[str, Query(
+                description="Spacecraft clock time as string",
+                openapi_examples={
+                    "empty": {
+                        "summary": "Default",
+                        "value": None
+                    },
+                    "ctx": {
+                        "summary": "MRO CTX Example",
+                        "value": "1321396563:036"
+                    }
+                }
+            )]):
+        self.value = sclk
+
+
+class SpiceqlNamesParam():
+    @validate_params
+    def __init__(
+            self,
+            spiceqlNames: Annotated[list[str], Query(
+                description="List of mission names.",
+                openapi_examples={
+                    "empty": {
+                        "summary": "No mission names",
+                        "value": []
+                    },
+                    "ctx": {
+                        "summary": "MRO CTX Example",
+                        "value": ["ctx", "mars"]
+                    }
+                }
+            )] = []):
+        self.value = spiceqlNames
+
+
+class SpkQualitiesParam():
+    @validate_params
+    def __init__(
+            self,
+            spkQualities: Annotated[list[str], Query(
+                description="List of SPK qualities.",
+                openapi_examples={
+                    "smithed": {
+                        "summary": "Only smithed",
+                        "value": ["smithed"]
+                    },
+                    "reconstructed": {
+                        "summary": "Only reconstructed",
+                        "value": ["reconstructed"]
+                    },
+                    "all": {
+                        "summary": "All quality types",
+                        "value": ["smithed", "reconstructed", "predicted", "nadir", "noquality"]
+                    }
+                }
+            )] = ["smithed", "reconstructed"]):
+        self.value = spkQualities
+        
 
 class StartEtParam():
     @validate_params
@@ -809,43 +745,6 @@ class StopEtParam():
         self.value = stopEt
 
 
-class SpiceqlNamesParam():
-    @validate_params
-    def __init__(
-            self,
-            spiceqlNames: Annotated[list[str], Query(
-                description="List of mission names.",
-                openapi_examples={
-                    "empty": {
-                        "summary": "No mission names",
-                        "value": []
-                    },
-                    "ctx": {
-                        "summary": "MRO CTX Example",
-                        "value": ["ctx", "mars"]
-                    }
-                }
-            )] = []):
-        self.value = spiceqlNames
-
-
-
-class TypesParam():
-    @validate_params
-    def __init__(
-            self,
-            types: Annotated[list[str], Query(
-                description="List of kernel types.",
-                openapi_examples={
-                    "ctx": {
-                        "summary": "MRO CTX Example",
-                        "value": ["sclk", "ck", "pck", "fk", "ik", "iak", "lsk", "tspk", "spk"]
-                    }
-                }
-            )] = ["ck", "spk", "tspk", "lsk", "mk", "sclk", "iak", "ik", "fk", "dsk", "pck", "ek"]):
-        self.value = types
-
-
 class StartTimeParam():
     @validate_params
     def __init__(
@@ -878,20 +777,118 @@ class StopTimeParam():
         self.value = stopTime
 
 
+class TargetParam():
+    def __init__(
+            self,
+            target: Annotated[str, Query(
+                description="Target name.",
+                openapi_examples={
+                    "empty": {
+                        "summary": "Default",
+                        "value": None
+                    },
+                    "ctx": {
+                        "summary": "MRO CTX Example",
+                        "value": "sun"
+                    }
+                }
+            )]):
+        self.value = target
 
-class OverwriteParam():
+
+class TargetFrameParam():
     @validate_params
     def __init__(
             self,
-            overwrite: Annotated[bool, Query(
-                description="Whether to remote duplicate kernel matches.",
+            targetFrame: Annotated[int, Query(
+                description="Target frame code",
                 openapi_examples={
-                    "default": {
+                    "empty": {
                         "summary": "Default",
-                        "value": False
+                        "value": None
+                    },
+                    "ctx": {
+                        "summary": "MRO CTX Example",
+                        "value": -74021
                     }
                 }
-            )] = False):
-        self.value = overwrite
+            )]):
+        self.value = targetFrame
+
+
+class TargetIdParam():
+    @validate_params
+    def __init__(
+            self,
+            targetId: Annotated[int, Query(
+                description="Target ID code",
+                openapi_examples={
+                    "empty": {
+                        "summary": "Default",
+                        "value": None
+                    },
+                    "ctx": {
+                        "summary": "MRO CTX Example",
+                        "value": 499
+                    }
+                }
+            )]):
+        self.value = targetId
+
+
+class ToFrameParam():
+    def __init__(
+            self,
+            toFrame: Annotated[int, Query(
+                description="Target frame code.",
+                openapi_examples={
+                    "empty": {
+                        "summary": "Default",
+                        "value": None
+                    },
+                    "ctx": {
+                        "summary": "MRO CTX Example",
+                        "value": "-74000"
+                    }
+                }
+            )]):
+        self.value = toFrame
+
+
+class TypesParam():
+    @validate_params
+    def __init__(
+            self,
+            types: Annotated[list[str], Query(
+                description="List of kernel types.",
+                openapi_examples={
+                    "ctx": {
+                        "summary": "MRO CTX Example",
+                        "value": ["sclk", "ck", "pck", "fk", "ik", "iak", "lsk", "tspk", "spk"]
+                    }
+                }
+            )] = ["ck", "spk", "tspk", "lsk", "mk", "sclk", "iak", "ik", "fk", "dsk", "pck", "ek"]):
+        self.value = types
+
+
+class UtcParam():
+    @validate_params
+    def __init__(
+            self,
+            utc: Annotated[str, Query(
+                description="UTC Time.",
+                openapi_examples={
+                    "empty": {
+                        "summary": "Default",
+                        "value": None
+                    },
+                    "example1": {
+                        "summary": "Example 1",
+                        "value": "1971-08-04T16:28:24.9159358"
+                    }
+                }
+            )]):
+        self.value = utc   
+
 
 #endregion
