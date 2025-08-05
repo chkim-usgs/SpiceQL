@@ -98,7 +98,21 @@ async def getTargetStates(params: TargetStatesRequestModel):
     limitSpk = params.limitSpk
     kernelList = params.kernelList
     try:
-        result, kernels = pyspiceql.getTargetStates(ets, target, observer, frame, abcorr, mission, ckQualities, spkQualities, False, searchKernels, fullKernelPath, limitCk, limitSpk, kernelList)
+        result, kernels = pyspiceql.getTargetStates(
+            ets,
+            target,
+            observer,
+            frame,
+            abcorr,
+            mission,
+            ckQualities,
+            spkQualities,
+            False,
+            searchKernels,
+            fullKernelPath,
+            limitCk,
+            limitSpk,
+            kernelList)
         body = ResultModel(result=result, kernels=kernels)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:
@@ -466,13 +480,13 @@ async def getExactTargetOrientations(
 @app.get("/searchForKernelsets")
 async def searchForKernelsets(
     spiceqlNames: Annotated[SpiceqlNamesParam, Depends()],
-    types: Annotated[SpiceqlNamesParam, Depends()],
-    startTime: Annotated[SpiceqlNamesParam, Depends()],
-    stopTime: Annotated[SpiceqlNamesParam, Depends()],
+    types: Annotated[TypesParam, Depends()],
+    startTime: Annotated[StartTimeParam, Depends()],
+    stopTime: Annotated[StopTimeParam, Depends()],
     ckQualities: Annotated[CkQualitiesParam, Depends()],
     spkQualities: Annotated[SpkQualitiesParam, Depends()],
     commonParams: Annotated[CommonParams, Depends()],
-    overwrite: Annotated[SpiceqlNamesParam, Depends()],):
+    overwrite: Annotated[OverwriteParam, Depends()]):
     try:
         logger.debug("Calling searchForKernelsets ....")
         result, kernels = pyspiceql.searchForKernelsets(

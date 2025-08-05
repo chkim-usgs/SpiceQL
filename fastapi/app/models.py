@@ -29,13 +29,13 @@ def validate_params(init_func):
             logger.debug(f"  Checking '{var_name}': {var_value}, 'type': {str(type(var_value))}")
             
             # Check if variable names are possible list type
-            if var_name in ['ckQualities', 'spkQualities', 'kernelList', 'spiceqlNames', 'types']:
-                setattr(self, var_name, strToList(var_value))
+            if var_name in ['ckQualities', 'spkQualities', 'kernelList', 'spiceqlNames', 'types'] or \
+               any(sub in self.__class__.__name__.lower() for sub in ['ckqualities', 'spkqualities', 'spiceqlnames', 'types']):
+                setattr(self, var_name, to_list(var_value))
             
             # Check if variable name is 'ets'
-            if var_name == 'ets':
-                ets = var_value
-                ets = verify_ets(ets, self.__dict__['startEt'], self.__dict__['stopEt'], self.__dict__['numRecords'])
+            if var_name == 'ets' or 'ets' in self.__class__.__name__.lower():
+                ets = verify_ets(self.__dict__) #, self.__dict__['startEt'], self.__dict__['stopEt'], self.__dict__['numRecords'])
                 setattr(self, var_name, ets)
         
         logger.debug(f"--- Validation successful for instance of {self.__class__.__name__} ---")
@@ -53,30 +53,30 @@ Utilities for param validation.
 def calculate_ets(startEt, stopEt, numRecords) -> list:
     return np.linspace(startEt, stopEt, numRecords)
 
-def strToList(value: str) -> list:
-    # Converts a string into a list or its literal value
+def to_list(value: Any) -> list:
+    # Converts value type into a list or its literal value
     if value is not None:
-        if isinstance(value, str):
-            value = value.replace("[", "").replace("]", "").replace("\"", "").replace("\'", "").replace(" ", "").split(",")
-        else:
-            try:
-                iter(value)
-            except TypeError:
-                value = [value]
+        value = str(value)
+        value = value.replace("[", "").replace("]", "").replace("\"", "").replace("\'", "").replace(" ", "").split(",")
     return value
 
-def verify_ets(ets, startEts, stopEts, exposureDuration):
-    if ets is not None:
-        if isinstance(ets, str):
-            ets = literal_eval(ets)
-        else:
-            # getTargetStates requires an iterable ets.  If not iterable, make it a list.
-            try:
-                ets = iter(ets)
-            except TypeError:
-                ets = [ets]
+def verify_ets(data: dict) -> float:
+    if "ets" in data:
+        ets = data["ets"]
+        if ets is not None:
+            if isinstance(ets, str):
+                ets = literal_eval(ets)
+            else:
+                # getTargetStates requires an iterable ets.  If not iterable, make it a list.
+                try:
+                    ets = iter(ets)
+                except TypeError:
+                    ets = [ets]
     else:
-        ets = calculate_ets(startEts, stopEts, exposureDuration)
+        startEt = data["startEt"]
+        stopEt = data["stopEt"]
+        numRecords = data["numRecords"]
+        ets = calculate_ets(startEt, stopEt, numRecords)
     return ets
 
 #endregion
@@ -108,25 +108,23 @@ class TargetStatesRequestModel(BaseModel):
     abcorr: str
     mission: str
     ets: Annotated[list[float], Query()] | float | str | None = None
-    startEts: float | None = None
-    stopEts: float | None = None
-    numRecords: int | None = None
+    startEt: float  = None
+    stopEt: float = None
+    numRecords: int = None
     ckQualities: Annotated[list[str], Query()] | str | None = ["smithed", "reconstructed"]
     spkQualities: Annotated[list[str], Query()] | str | None = ["smithed", "reconstructed"]
     kernelList: Annotated[list[str], Query()] | str | None = []
     searchKernels: bool = True
     fullKernelPath: bool = False
-    limitCk: int = -1,
+    limitCk: int = -1
     limitSpk: int = 1
 
     @field_validator('ets', mode='before')
     @classmethod
     def validate_ets(cls, ets: Any, info: ValidationInfo) -> str:
         """Strips leading/trailing whitespace from the name."""
-        startEts = info.data.get('startEts') 
-        stopEts = info.data.get('stopEts') 
-        numRecords = info.data.get('numRecords') 
-        ets = verify_ets(ets, startEts, stopEts, numRecords)
+        info.data["ets"] = ets
+        ets = verify_ets(info.data)
         return ets
 
 #endregion
@@ -318,6 +316,9 @@ class EtsParam():
                 }
             )] = None):
         self.value = ets
+        self.startEt = startEt
+        self.stopEt = stopEt
+        self.numRecords = numRecords
 
 
 class ExactCkFrameParam():
