@@ -254,22 +254,22 @@ class EtParam():
     def __init__(
             self,
             et: Annotated[float, Query(
-                description="Ephemeris time",
+                description="Ephemeris time.",
                 openapi_examples={
                     "empty": {
                         "summary": "Default",
                         "value": None
                     },
-                    "ctx": {
-                        "summary": "MRO CTX Example",
-                        "value": 690201375.8323615
-                    },
                     "example1": {
                         "summary": "Example 1",
+                        "value": 690201375.8323615
+                    },
+                    "example2": {
+                        "summary": "Example 2",
                         "value": -896556653.900884
                     },
-                    "frameTrace example": {
-                        "summary": "MRO CTX Example [frameTrace]",
+                    "exmaple3": {
+                        "summary": "Example 3",
                         "value": 690201382.5595295
                     }
                 }
@@ -288,14 +288,14 @@ class EtsParam():
                         "summary": "No ephemeris time range, using start/stop ETs and exposure duration instead.",
                         "value": None
                     },
-                    "ctx": {
-                        "summary": "MRO CTX Example",
+                    "example": {
+                        "summary": "Example list of ETs",
                         "value": [690201375.8323615, 690201389.2866975]
                     }
                 }
             )] = None,
             startEt: Annotated[float, Query(
-                description="Start ephemeris times.",
+                description="Start ephemeris time.",
                 openapi_examples={
                     "empty": {
                         "summary": "No startEt, using 'ets' param instead.",
@@ -304,7 +304,7 @@ class EtsParam():
                 }
             )] = None,
             stopEt: Annotated[float, Query(
-                description="Stop ephemeris times.",
+                description="Stop ephemeris time.",
                 openapi_examples={
                     "empty": {
                         "summary": "No stopEt, using 'ets' param instead.",
@@ -338,7 +338,7 @@ class ExactCkFrameParam():
                         "value": None
                     },
                     "ctx": {
-                        "summary": "MRO CTX Example",
+                        "summary": "MRO CTX Code [-74690]",
                         "value": "-74690"
                     }
                 }
@@ -358,7 +358,7 @@ class FormatParam():
                         "value": None
                     },
                     "example1": {
-                        "summary": "Format C",
+                        "summary": "Format [C]",
                         "value": "C"
                     }
                 }
@@ -370,18 +370,18 @@ class FrameCodeParam():
     def __init__(
             self,
             frameCode: Annotated[int, Query(
-                description="Frame code",
+                description="Frame code.",
                 openapi_examples={
                     "empty": {
                         "summary": "Default",
                         "value": None
                     },
                     "ctx": {
-                        "summary": "MRO CTX Example",
+                        "summary": "MRO CTX Code [-74]",
                         "value": -74
                     },
                     "lro": {
-                        "summary": "LRO Example",
+                        "summary": "LRO Code [-85]",
                         "value": -85
                     }
                 }
@@ -401,7 +401,7 @@ class FrameIntParam():
                         "value": None
                     },
                     "ctx": {
-                        "summary": "MRO CTX Example",
+                        "summary": "MRO CTX Code [-74]",
                         "value": -74
                     }
                 }
@@ -420,11 +420,11 @@ class FrameStrParam():
                         "value": None
                     },
                     "ctx": {
-                        "summary": "MRO CTX Frame - IAU_MARS",
+                        "summary": "MRO CTX Frame [IAU_MARS]",
                         "value": "IAU_MARS"
                     },
                     "lro": {
-                        "summary": "LROC Frame - MOON_ME",
+                        "summary": "LROC Frame [MOON_ME]",
                         "value": "MOON_ME"
                     }
                 }
@@ -437,7 +437,7 @@ class InitialFrameParam():
     def __init__(
             self,
             initialFrame: Annotated[int, Query(
-                description="Initial frame code",
+                description="Initial frame code.",
                 openapi_examples={
                     "empty": {
                         "summary": "Default",
@@ -457,7 +457,7 @@ class KeyParam():
     def __init__(
             self,
             key: Annotated[str, Query(
-                description="Key word",
+                description="Key word.",
                 openapi_examples={
                     "empty": {
                         "summary": "Default",
@@ -548,14 +548,14 @@ class ObservEndParam():
     def __init__(
             self,
             observEnd: Annotated[float, Query(
-                description="Observed end ephemeris time",
+                description="Observed end ephemeris time.",
                 openapi_examples={
                     "empty": {
                         "summary": "Default",
                         "value": None
                     },
-                    "ctx": {
-                        "summary": "MRO CTX Example",
+                    "example": {
+                        "summary": "Example end time",
                         "value": 690201382.5595295
                     }
                 }
@@ -568,14 +568,14 @@ class ObservStartParam():
     def __init__(
             self,
             observStart: Annotated[float, Query(
-                description="Observed start ephemeris time",
+                description="Observed start ephemeris time.",
                 openapi_examples={
                     "empty": {
                         "summary": "Default",
                         "value": None
                     },
                     "ctx": {
-                        "summary": "MRO CTX Example",
+                        "summary": "Example start time",
                         "value": 690201382.5595295
                     }
                 }
@@ -611,7 +611,7 @@ class PrecisionParam():
                         "value": None
                     },
                     "example1": {
-                        "summary": "10",
+                        "summary": "10th decimal",
                         "value": 10
                     }
                 }
@@ -630,7 +630,7 @@ class RefFrameParam():
                         "value": None
                     },
                     "ctx": {
-                        "summary": "MRO CTX Example",
+                        "summary": "MRO CTX Frame [-74690]",
                         "value": "-74690"
                     }
                 }
@@ -642,7 +642,7 @@ class SclkDblParam():
     def __init__(
             self,
             sclk: Annotated[float, Query(
-                description="Spacecraft clock time as double or float",
+                description="Spacecraft clock time as double or float.",
                 openapi_examples={
                     "empty": {
                         "summary": "Default",
@@ -661,7 +661,7 @@ class SclkStrParam():
     def __init__(
             self,
             sclk: Annotated[str, Query(
-                description="Spacecraft clock time as string",
+                description="Spacecraft clock time as string.",
                 openapi_examples={
                     "empty": {
                         "summary": "Default",
@@ -725,14 +725,14 @@ class StartEtParam():
     def __init__(
             self,
             startEt: Annotated[float, Query(
-                description="Start ephemeris time",
+                description="Start ephemeris time.",
                 openapi_examples={
                     "empty": {
                         "summary": "Default",
                         "value": None
                     },
-                    "ctx": {
-                        "summary": "MRO CTX Example",
+                    "example": {
+                        "summary": "Example start time",
                         "value": 690201382.5595295
                     }
                 }
@@ -745,14 +745,14 @@ class StopEtParam():
     def __init__(
             self,
             stopEt: Annotated[float, Query(
-                description="Stop ephemeris time",
+                description="Stop ephemeris time.",
                 openapi_examples={
                     "empty": {
                         "summary": "Default",
                         "value": None
                     },
-                    "ctx": {
-                        "summary": "MRO CTX Example",
+                    "example": {
+                        "summary": "Example stop time",
                         "value": 690201382.5595295
                     }
                 }
@@ -767,8 +767,8 @@ class StartTimeParam():
             startTime: Annotated[float, Query(
                 description="Start ephemeris time.",
                 openapi_examples={
-                    "ctx": {
-                        "summary": "MRO CTX Example",
+                    "example": {
+                        "summary": "Example start time",
                         "value": 690201375.8323615
                     }
                 }
@@ -783,8 +783,8 @@ class StopTimeParam():
             stopTime: Annotated[float, Query(
                 description="Stop ephemeris time.",
                 openapi_examples={
-                    "ctx": {
-                        "summary": "MRO CTX Example",
+                    "example": {
+                        "summary": "Example stop time",
                         "value": 690201389.2866975
                     }
                 }
@@ -816,14 +816,14 @@ class TargetFrameParam():
     def __init__(
             self,
             targetFrame: Annotated[int, Query(
-                description="Target frame code",
+                description="Target frame code.",
                 openapi_examples={
                     "empty": {
                         "summary": "Default",
                         "value": None
                     },
                     "ctx": {
-                        "summary": "MRO CTX Example",
+                        "summary": "MRO CTX Code [-74021]",
                         "value": -74021
                     }
                 }
@@ -836,14 +836,14 @@ class TargetIdParam():
     def __init__(
             self,
             targetId: Annotated[int, Query(
-                description="Target ID code",
+                description="Target ID code.",
                 openapi_examples={
                     "empty": {
                         "summary": "Default",
                         "value": None
                     },
                     "ctx": {
-                        "summary": "MRO CTX Example",
+                        "summary": "MRO CTX Code [499]",
                         "value": 499
                     }
                 }
@@ -862,7 +862,7 @@ class ToFrameParam():
                         "value": None
                     },
                     "ctx": {
-                        "summary": "MRO CTX Example",
+                        "summary": "MRO CTX Code [-74000]",
                         "value": "-74000"
                     }
                 }
@@ -898,7 +898,7 @@ class UtcParam():
                         "value": None
                     },
                     "example1": {
-                        "summary": "Example 1",
+                        "summary": "Example UTC time",
                         "value": "1971-08-04T16:28:24.9159358"
                     }
                 }
