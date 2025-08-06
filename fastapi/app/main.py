@@ -3,7 +3,7 @@
 from .models import *
 
 from typing import Annotated
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Body
 import os
 import pyspiceql
 import logging
@@ -80,7 +80,15 @@ async def getTargetStates(
     
     
 @app.post("/getTargetStates")
-async def getTargetStates(params: TargetStatesRequestModel):
+async def getTargetStates(params: Annotated[TargetStatesRequestModel, Body(
+    openapi_examples={
+        "test": {
+            "summary": "this is a summary",
+            "description": "this is a description",
+            "value": {"ets": "[302228504.36824864]", "target": "LUNAR RECONNAISSANCE ORBITER", "observer": "MOON", "frame": "J2000", "abcorr": "None", "mission": "lroc", "searchKernels": "True"}
+        }
+    }
+)]):
     target = params.target
     observer = params.observer
     frame =  params.frame

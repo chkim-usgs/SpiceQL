@@ -34,9 +34,9 @@ def validate_params(init_func):
                 setattr(self, var_name, to_list(var_value))
             
             # Check if variable name is 'ets'
-            if var_name == 'ets' or 'ets' in self.__class__.__name__.lower():
+            if self.__class__.__name__ == 'EtsParam':
                 ets = verify_ets(self.__dict__) #, self.__dict__['startEt'], self.__dict__['stopEt'], self.__dict__['numRecords'])
-                setattr(self, var_name, ets)
+                setattr(self, "value", ets)
         
         logger.debug(f"--- Validation successful for instance of {self.__class__.__name__} ---")
         logger.debug(f"AFTERMATH self: {str(self.__dict__.items())}")
@@ -57,12 +57,12 @@ def to_list(value: Any) -> list:
     # Converts value type into a list or its literal value
     if value is not None:
         value = str(value)
-        value = value.replace("[", "").replace("]", "").replace("\"", "").replace("\'", "").replace(" ", "").split(",")
+        value = value.replace("[", "").replace("]", "").replace("\"", "").replace("\'", "").replace("\\", "").replace(" ", "").split(",")
     return value
 
 def verify_ets(data: dict) -> float:
-    if "ets" in data:
-        ets = data["ets"]
+    if "value" in data and data["value"] is not None:
+        ets = data["value"]
         if ets is not None:
             if isinstance(ets, str):
                 ets = literal_eval(ets)
@@ -123,7 +123,7 @@ class TargetStatesRequestModel(BaseModel):
     @classmethod
     def validate_ets(cls, ets: Any, info: ValidationInfo) -> str:
         """Strips leading/trailing whitespace from the name."""
-        info.data["ets"] = ets
+        info.data["value"] = ets
         ets = verify_ets(info.data)
         return ets
 
@@ -140,14 +140,14 @@ class AbcorrParam():
     def __init__(
             self,
             abcorr: Annotated[str, Query(
-                description="Abcorr.",
+                description="Aberration correction.",
                 openapi_examples={
                     "empty": {
                         "summary": "Default",
                         "value": None
                     },
-                    "ctx": {
-                        "summary": "MRO CTX Example",
+                    "lts": {
+                        "summary": "LT+S",
                         "value": "LT+S"
                     }
                 }
@@ -167,8 +167,14 @@ class CommonParams():
                         "value": []
                     },
                     "test1": {
-                        "summary": "example1",
-                        "value": ["123", "asd"]
+                        "summary": "LROC example",
+                        "value": [
+                            "/moon/tspk/moon_pa_de421_1900-2050.bpc",
+                            "/lro/tspk/de421.bsp",
+                            "/base/pck/pck[0-9]\\{5\\}.tpc",
+                            "/moon/pck/moon_080317.tf",
+                            "/moon/pck/moon_assoc_me.tf"
+                        ]
                     }
                 }
             )] = [],
@@ -413,13 +419,13 @@ class FrameStrParam():
                         "summary": "Default",
                         "value": None
                     },
-                    "ctx1": {
-                        "summary": "MRO CTX Example",
+                    "ctx": {
+                        "summary": "MRO CTX Frame - IAU_MARS",
                         "value": "IAU_MARS"
                     },
-                    "ctx2": {
-                        "summary": "MRO CTX Example",
-                        "value": "IAU_MARS"
+                    "lro": {
+                        "summary": "LROC Frame - MOON_ME",
+                        "value": "MOON_ME"
                     }
                 }
             )]):
@@ -438,7 +444,7 @@ class InitialFrameParam():
                         "value": None
                     },
                     "ctx": {
-                        "summary": "MRO CTX Example",
+                        "summary": "MRO CTX Code [-74021]",
                         "value": -74021
                     }
                 }
@@ -458,11 +464,11 @@ class KeyParam():
                         "value": None
                     },
                     "ctx1": {
-                        "summary": "MRO CTX Example",
+                        "summary": "MRO CTX Key [*-74021*]",
                         "value": "*-74021*"
                     },
                     "ctx2": {
-                        "summary": "MRO CTX Example",
+                        "summary": "MRO CTX Key [*499*] ",
                         "value": "*499*"
                     }
                 }
@@ -502,8 +508,12 @@ class MissionParam():
                         "value": None
                     },
                     "ctx": {
-                        "summary": "MRO CTX Example",
+                        "summary": "MRO CTX",
                         "value": "ctx"
+                    },
+                    "lro": {
+                        "summary": "LROC",
+                        "value": "lroc"
                     }
                 }
             )]):
@@ -520,9 +530,13 @@ class ObserverParam():
                         "summary": "Default",
                         "value": None
                     },
-                    "ctx": {
-                        "summary": "MRO CTX Example",
+                    "mars": {
+                        "summary": "Mars",
                         "value": "mars"
+                    },
+                    "moon": {
+                        "summary": "Moon",
+                        "value": "moon"
                     }
                 }
             )]):
@@ -788,8 +802,8 @@ class TargetParam():
                         "summary": "Default",
                         "value": None
                     },
-                    "ctx": {
-                        "summary": "MRO CTX Example",
+                    "sun": {
+                        "summary": "Sun",
                         "value": "sun"
                     }
                 }
