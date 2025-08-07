@@ -1,7 +1,7 @@
 import logging
 import os
 
-log_level = os.environ.get('SPICEQL_FASTAPI_LOG_LEVEL')
+log_level = os.environ.get('SPICEQL_LOG_LEVEL')
 if log_level is not None and log_level.lower() == "debug":
     log_level = logging.DEBUG
 else:
