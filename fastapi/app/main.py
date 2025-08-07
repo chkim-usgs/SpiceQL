@@ -10,8 +10,6 @@ import logging
 import h5py
 
 
-# logger = logging.getLogger('uvicorn.error')
-# logger.setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # Create FastAPI instance

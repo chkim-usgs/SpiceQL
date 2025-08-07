@@ -9,9 +9,6 @@ import functools
 
 logger = logging.getLogger(__name__)
 
-# logger = logging.getLogger('uvicorn.error')
-# logger.setLevel(logging.DEBUG)
-
 #region DECORATOR
 """
 Decorator that checks and validates any list-like inputs and ets calculations.
