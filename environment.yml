@@ -5,7 +5,7 @@ channels:
 dependencies:
   - cmake
   - cpp-filesystem
-  - cspice==67=h6e16a3a_8
+  - cspice=67=h6e16a3a_8
   - cxx-compiler
   - doxygen
   - h5py
