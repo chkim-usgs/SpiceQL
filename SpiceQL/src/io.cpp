@@ -1,5 +1,7 @@
 #include <iostream>
 #include <fstream>
+#include <memory>
+#include <sstream>
 
 #include <fmt/format.h>
 
@@ -7,6 +9,8 @@
 
 #include "io.h"
 #include "utils.h"
+
+#include <spdlog/spdlog.h>
 
 
 using namespace std;
@@ -94,7 +98,6 @@ namespace SpiceQL {
     for(auto &et : times) {
       double sclkdp;
       checkNaifErrors();
-      sce2c_c(bodyCode/1000, et, &sclkdp);
       checkNaifErrors();
       et = sclkdp;
     }
@@ -138,6 +141,22 @@ namespace SpiceQL {
                  int polyDegree,
                  vector<vector<double>> stateVelocities,
                  string segmentComment) {
+
+    if (stateTimes.empty() || statePositions.empty()) {
+      throw runtime_error("writeSpk: stateTimes and statePositions must be non-empty.");
+    }
+
+    // NAIF spkw13_c requires segment start time < end time. Single-epoch (e.g. from ISD) has start == end.
+    if (stateTimes.size() == 1) {
+      stateTimes.push_back(stateTimes.front() + 1E-6);
+      statePositions.push_back(statePositions.front());
+      if (!stateVelocities.empty()) {
+        stateVelocities.push_back(stateVelocities.front());
+      }
+    } else if (stateTimes.front() >= stateTimes.back()) {
+      throw runtime_error(
+          "writeSpk: segment start time must be less than end time (got start == end or reversed order).");
+    }
 
     vector<vector<double>> states;
 
@@ -350,6 +369,104 @@ namespace SpiceQL {
     }
 
     textKernel.close();
+  }
+
+  namespace {
+    thread_local std::string g_writeCkFromBuffersLastError;
+
+    std::vector<std::string> split(const std::string& s, char delim) {
+      std::vector<std::string> out;
+      std::istringstream ss(s);
+      std::string part;
+      while (std::getline(ss, part, delim)) {
+        auto start = part.find_first_not_of(" \t");
+        if (start == std::string::npos) continue;
+        auto end = part.find_last_not_of(" \t");
+        out.push_back(part.substr(start, end == std::string::npos ? part.size() : end - start + 1));
+      }
+      return out;
+    }
+  }
+
+  extern "C" int writeCkFromBuffers(
+    const char* path,
+    const double* quats,
+    size_t n_quats,
+    const double* times,
+    size_t n_times,
+    int bodyCode,
+    const char* referenceFrame,
+    const char* segmentId,
+    const char* sclk,
+    const char* lsk,
+    const double* av,
+    size_t n_av,
+    const char* comment
+  ) {
+    g_writeCkFromBuffersLastError.clear();
+    if (path == nullptr || quats == nullptr || times == nullptr || n_quats == 0 || n_times == 0) {
+      g_writeCkFromBuffersLastError = "writeCkFromBuffers: path/quats/times must be non-null and non-empty.";
+      return -1;
+    }
+    try {
+      std::string commentStr(comment ? comment : "");
+      if (commentStr.empty()) commentStr = "CK Kernel";
+
+      // sclk: single path or comma-separated list; must keep Kernel objects alive or destructors unload them
+      std::vector<std::unique_ptr<Kernel>> sclkKernels;
+      if (sclk && *sclk) {
+        for (const std::string& sclkPath : split(sclk, ','))
+          sclkKernels.push_back(std::make_unique<Kernel>(sclkPath));
+      }
+      Kernel lskKernel(lsk ? lsk : "");
+
+      int clockId = bodyCode / 1000;
+      std::vector<double> sclkTimes(n_times);
+      for (size_t i = 0; i < n_times; i++) {
+        double sclkdp;
+        checkNaifErrors();
+        sce2c_c(clockId, times[i], &sclkdp);
+        checkNaifErrors();
+        sclkTimes[i] = sclkdp;
+      }
+      checkNaifErrors();
+
+      SpiceInt handle;
+      ckopn_c(path, "CK", (SpiceInt)commentStr.size(), &handle);
+      checkNaifErrors();
+      ckw03_c(
+        handle,
+        sclkTimes[0],
+        sclkTimes[n_times - 1],
+        bodyCode,
+        referenceFrame ? referenceFrame : "",
+        (av != nullptr && n_av > 0) ? SPICETRUE : SPICEFALSE,
+        segmentId ? segmentId : "",
+        (SpiceInt)n_times, sclkTimes.data(),
+        quats,
+        (av != nullptr && n_av > 0) ? av : nullptr,
+        (SpiceInt)n_times,
+        sclkTimes.data()
+      );
+      checkNaifErrors();
+
+      ckcls_c(handle);
+      checkNaifErrors();
+      writeComment(path, commentStr);
+      return 0;
+    } catch (const std::exception& e) {
+      g_writeCkFromBuffersLastError = e.what();
+      reset_c();
+      return -1;
+    } catch (...) {
+      g_writeCkFromBuffersLastError = "writeCkFromBuffers: unknown exception";
+      reset_c();
+      return -1;
+    }
+  }
+
+  extern "C" const char* writeCkFromBuffersLastError(void) {
+    return g_writeCkFromBuffersLastError.c_str();
   }
 
 }

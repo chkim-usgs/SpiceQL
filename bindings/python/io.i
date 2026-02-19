@@ -4,4 +4,5 @@
   #include "io.h"
 %}
 
+%ignore writeCkFromBuffers;
 %include "io.h"
