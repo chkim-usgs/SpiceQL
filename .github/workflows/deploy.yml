@@ -37,6 +37,7 @@ jobs:
           echo $SPICEQL_VERSION
           cd recipe
           sed -e "s/{% set version = \"[^\"]*\" %}/{% set version = \"$SPICEQL_VERSION\" %}/" meta.yaml > meta.yaml
+          cat meta.yaml
           conda build --user usgs-astrogeology --label dev -c conda-forge -c tudat-team .
 
   aws-docs-deploy:
