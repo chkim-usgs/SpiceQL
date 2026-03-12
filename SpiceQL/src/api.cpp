@@ -224,7 +224,7 @@ namespace SpiceQL {
                     j = json::parse(result.body);
                 } catch (const json::parse_error& e) {
                     SPDLOG_ERROR("Error parsing JSON: {}", e.what());
-                    throw runtime_error("Got invalid JSON response from API: " + result.body);
+                    throw runtime_error("Got invalid JSON response from API");
                 }
             }).ExecuteSynchronous();
         } else {
@@ -252,9 +252,11 @@ namespace SpiceQL {
             throw runtime_error("REST API Response is not a valid JSON.");
         }
 
+        SPDLOG_DEBUG("Response: ", j.dump());
+        
         // Check for successful call
         if (!(j["statusCode"] == 200)) {
-            throw runtime_error("REST API Error Response: [" + j["body"].dump() + "]");
+            throw runtime_error("REST API Error Response: [" + j.dump() + "]");
         }
 
         return j;
@@ -296,7 +298,7 @@ namespace SpiceQL {
         json ephemKernels = {};
 
         if (searchKernels) {
-            ephemKernels = Inventory::search_for_kernelsets({mission, target, observer, "base"}, {"sclk", "ck", "spk", "pck", "tspk", "lsk", "fk", "ik"}, ets.front(), ets.back(), ckQualities, spkQualities, fullKernelPath, limitCk, limitSpk);
+            ephemKernels = Inventory::search_for_kernelsets({mission, target, observer, "base"}, {"sclk", "ck", "spk", "pck", "tspk", "lsk", "fk", "iak",  "ik"}, ets.front(), ets.back(), ckQualities, spkQualities, fullKernelPath, limitCk, limitSpk);
             SPDLOG_DEBUG("{} Kernels : {}", mission, ephemKernels.dump(4));
         }
 
@@ -359,7 +361,7 @@ namespace SpiceQL {
         json ephemKernels = {};
 
         if (searchKernels) {
-            ephemKernels = Inventory::search_for_kernelsets({mission, "base"}, {"sclk", "ck", "pck", "fk", "ik", "lsk", "tspk"}, ets.front(), ets.back(), ckQualities, {"noquality"}, fullKernelPath, limitCk, limitSpk);
+            ephemKernels = Inventory::search_for_kernelsets({mission, "base"}, {"sclk", "ck", "pck", "fk", "ik", "iak", "lsk", "tspk"}, ets.front(), ets.back(), ckQualities, {"noquality"}, fullKernelPath, limitCk, limitSpk);
         }
 
         if (!kernelList.empty()) {
@@ -681,7 +683,7 @@ namespace SpiceQL {
         json kernelsToLoad = {};
 
         if (mission != "" && searchKernels) {
-            kernelsToLoad = Inventory::search_for_kernelset(mission, {"fk", "ik"}, default_StartTime, default_StopTime, default_KernelQualities, default_KernelQualities, fullKernelPath, limitCk, limitSpk);
+            kernelsToLoad = Inventory::search_for_kernelset(mission, {"fk", "ik", "iak"}, default_StartTime, default_StopTime, default_KernelQualities, default_KernelQualities, fullKernelPath, limitCk, limitSpk);
         }
 
         if (!kernelList.empty()) {
@@ -877,7 +879,7 @@ namespace SpiceQL {
         json translationKernels = {};
 
         if (mission != "" && searchKernels) {
-            translationKernels = Inventory::search_for_kernelset(mission, {"iak", "fk", "ik"}, default_StartTime, default_StopTime, default_KernelQualities, default_KernelQualities, fullKernelPath, limitCk, limitSpk);
+            translationKernels = Inventory::search_for_kernelset(mission, {"iak", "fk", "ik", "iak"}, default_StartTime, default_StopTime, default_KernelQualities, default_KernelQualities, fullKernelPath, limitCk, limitSpk);
         }
 
         if (!kernelList.empty()) {

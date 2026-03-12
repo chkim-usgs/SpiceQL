@@ -99,7 +99,14 @@ namespace SpiceQL {
 
   Kernel::Kernel(string path) {
     this->path = path;
-    load(path, true);
+    if (fs::exists(this->path)) {
+      SPDLOG_TRACE("path is valid");
+    } else {
+      SPDLOG_TRACE("appending path to data_dir");
+      this->path = getDataDirectory() / fs::path(path);
+    }
+
+    load(this->path, true);
   }
 
 
@@ -117,17 +124,12 @@ namespace SpiceQL {
   void load(string path, bool force_refurnsh) {
     SPDLOG_DEBUG("Furnishing {}, force refurnish? {}.", path, force_refurnsh); 
     checkNaifErrors();
-    if (fs::exists(path)) {
-      SPDLOG_TRACE("path is valid");
-    } else {
-      SPDLOG_TRACE("appending path to data_dir");
-      path = getDataDirectory() / fs::path(path);
-    }
     furnsh_c(path.c_str());
     checkNaifErrors();
   }
 
   void unload(string path) {
+    SPDLOG_TRACE("Unloading kernel {}", path);
     checkNaifErrors();
     unload_c(path.c_str());
     checkNaifErrors();
@@ -140,24 +142,26 @@ namespace SpiceQL {
   void KernelSet::load(json kernels) { 
     SPDLOG_TRACE("Creating Kernelset: {}", kernels.dump());
     this->m_kernels.merge_patch(kernels);
-    
+    vector<string> iaks = {};
+
+    // If kernels have "iak" key, pop it and load first
+    if (kernels.contains("iak")) {
+      auto iak_value = kernels["iak"];
+      iaks = jsonArrayToVector(iak_value);
+      // Remove the "iak" key from kernels
+      kernels.erase("iak");
+    }
+
     vector<string> kv = getKernelsAsVector(kernels);
     fs::path data_dir = getDataDirectory();
+    
+    if(!iaks.empty()) {
+      // Add any kernels in the json object to the end of kv
+      kv.insert(kv.end(), iaks.begin(), iaks.end());
+    }
 
     for (auto &k : kv) {
       SPDLOG_TRACE("Initial kernel {}", k);
-
-      if (fs::exists(k)) {
-        SPDLOG_TRACE("k path is valid");
-      } else {
-        SPDLOG_TRACE("appending k to data_dir");
-        k = data_dir / k;
-      }
-      
-      SPDLOG_TRACE("Creating shared kernel {}", k);
-      if (!fs::exists(k)) { 
-        throw runtime_error("Kernel " + k + " does not exist");
-      }
       
       try { 
         Kernel *kp = new Kernel(k);
@@ -166,11 +170,12 @@ namespace SpiceQL {
         throw runtime_error("something went wrong: " + string(e.what()));
       }
     }
+    SPDLOG_TRACE("Loaded {} kernels", m_loadedKernels.size());
   }
 
 
   void KernelSet::unload() {
-    for(auto p : m_loadedKernels) { 
+    for(auto p : m_loadedKernels) {
       delete p;
     }
     m_loadedKernels.clear();
