@@ -3,50 +3,33 @@ import numpy as np
 import os
 import sys
 
-
 def _find_lib():
-    # Get the pyspiceql module extension
-    mod = sys.modules.get("pyspiceql._pyspiceql")
-    if mod is None:
-        try:
-            import pyspiceql
-        except ImportError:
-            pass
-        mod = sys.modules.get("pyspiceql._pyspiceql")
-    if not mod or not getattr(mod, "__file__", None):
-        return None, None, []
-
-    # Path to _pyspiceql.so
-    so_dir = os.path.normpath(os.path.dirname(os.path.abspath(mod.__file__)))
-
-    # For local builds
-    build_root = os.path.normpath(os.path.join(so_dir, "..", "..", ".."))
-    env_libs = [os.path.join(p, "lib") for p in (os.environ.get("CONDA_PREFIX"), sys.prefix) if p]
-    lib_dirs = [*env_libs, so_dir, build_root]
-
-    # Check extension for writeCkFromBuffers()
+    # Load library
     try:
+        from . import _pyspiceql as mod
+        
         lib = ctypes.CDLL(mod.__file__)
         if hasattr(lib, "writeCkFromBuffers"):
-            return lib, mod.__file__, lib_dirs
-    except OSError:
+            return lib, mod.__file__, []
+    except (ImportError, AttributeError, OSError) as e:
+        # Log the error to your console/terminal for debugging
+        print(f"DEBUG: Internal import failed: {e}")
         pass
 
-    # Search for libSpiceQL
-    for d in lib_dirs:
-        if not os.path.isdir(d):
-            continue
-        for name in os.listdir(d):
-            if name.startswith("libSpiceQL") and (name.endswith(".so") or name.endswith(".dylib")):
-                path = os.path.join(d, name)
-                try:
-                    lib = ctypes.CDLL(path)
-                    if hasattr(lib, "writeCkFromBuffers"):
-                        return lib, path, lib_dirs
-                except OSError:
-                    pass
+    # Manual search and load library
+    try:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        # Look for the .so or .dylib file in the same folder as io.py
+        for f in os.listdir(current_dir):
+            if f.startswith("_pyspiceql") and (f.endswith(".so") or f.endswith(".dylib")):
+                path = os.path.join(current_dir, f)
+                lib = ctypes.CDLL(path)
+                if hasattr(lib, "writeCkFromBuffers"):
+                    return lib, path, []
+    except Exception as e:
+        print(f"DEBUG: Manual directory search failed: {e}")
 
-    return None, None, lib_dirs
+    return None, None, []
 
 
 _ck_lib, _ck_lib_path, _ck_lib_search_dirs = _find_lib()
@@ -68,7 +51,7 @@ if _ck_lib is not None:
             ctypes.c_size_t,
             ctypes.c_char_p,
         ]
-        _ck_lib.writeCk.restype = ctypes.c_int
+        _ck_lib.writeCkFromBuffers.restype = ctypes.c_int
         if hasattr(_ck_lib, "writeCkFromBuffersLastError"):
             _ck_lib.writeCkFromBuffersLastError.restype = ctypes.c_char_p
             _ck_lib.writeCkFromBuffersLastError.argtypes = []

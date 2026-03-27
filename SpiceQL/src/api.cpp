@@ -33,6 +33,7 @@ namespace SpiceQL {
     vector<string> default_KernelQualities = {"smithed", "reconstructed"};
 
     json aliasMap = {
+      {"A15_METRIC", "apollo"},
       {"AMICA", "amica"},
       {"CHANDRAYAAN-1_M3", "m3"},
       {"CHANDRAYAAN-1_MRFFR", "mrffr"},
@@ -71,6 +72,7 @@ namespace SpiceQL {
       {"MRO_MARCI_UV", "marci"},
       {"MRO_CTX", "ctx"},
       {"MRO_HIRISE", "hirise"},
+      {"MRO_HIRISE_LOOK_DIRECTION", "hirise"},
       {"MRO_CRISM_VNIR", "crism"},
       {"NEAR EARTH ASTEROID RENDEZVOUS", ""},
       {"NH_LORRI", "lorri"},
