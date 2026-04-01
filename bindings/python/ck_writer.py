@@ -19,7 +19,7 @@ def _find_lib():
     # Manual search and load library
     try:
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        # Look for the .so or .dylib file in the same folder as io.py
+        # Look for the .so or .dylib file in the same folder as ck_writer.py
         for f in os.listdir(current_dir):
             if f.startswith("_pyspiceql") and (f.endswith(".so") or f.endswith(".dylib")):
                 path = os.path.join(current_dir, f)
