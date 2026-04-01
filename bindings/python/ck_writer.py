@@ -12,7 +12,6 @@ def _find_lib():
         if hasattr(lib, "writeCkFromBuffers"):
             return lib, mod.__file__, []
     except (ImportError, AttributeError, OSError) as e:
-        # Log the error to your console/terminal for debugging
         print(f"DEBUG: Internal import failed: {e}")
         pass
 
