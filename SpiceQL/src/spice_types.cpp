@@ -91,7 +91,7 @@ namespace SpiceQL {
   }
 
   bool Kernel::isText(std::string type) {
-    return !isBinary(translateType(type));
+    return !isBinary(type);
   }
 
   bool Kernel::isCk(std::string type) {
