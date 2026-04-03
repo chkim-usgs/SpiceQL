@@ -208,28 +208,3 @@ namespace SpiceQL {
   void writeTextKernel(std::string fileName, std::string type, nlohmann::json &keywords, std::string comment = "");
 
   }
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-/** Returns 0 on success, -1 on error. On error, call writeCkFromBuffersLastError() for the message. */
-int writeCkFromBuffers(
-  const char* path,
-  const double* quats,
-  size_t n_quats,
-  const double* times,
-  size_t n_times,
-  int bodyCode,
-  const char* referenceFrame,
-  const char* segmentId,
-  const char* sclk,
-  const char* lsk,
-  const double* av,
-  size_t n_av,
-  const char* comment
-);
-/** Last error message from writeCkFromBuffers (valid until next writeCk call). */
-const char* writeCkFromBuffersLastError(void);
-#ifdef __cplusplus
-}
-#endif
