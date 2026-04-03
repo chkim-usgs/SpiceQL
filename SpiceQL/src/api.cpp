@@ -63,6 +63,7 @@ namespace SpiceQL {
       {"MARS", "mro"},
       {"MSGR_MDIS_WAC", "mdis"},
       {"MSGR_MDIS_NAC", "mdis"},
+      {"MEX_HRSC_HEAD", "hrsc"},
       {"MEX_HRSC_SRC", "src"},
       {"MEX_HRSC_IR", "hrsc"},
       {"MGS_MOC_NA", "mgs"},
