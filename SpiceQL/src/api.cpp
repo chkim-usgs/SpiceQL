@@ -33,7 +33,7 @@ namespace SpiceQL {
     vector<string> default_KernelQualities = {"smithed", "reconstructed"};
 
     json aliasMap = {
-      {"A15_METRIC", "apollo"},
+      {"A15_METRIC", "apollo15"},
       {"AMICA", "amica"},
       {"CHANDRAYAAN-1_M3", "m3"},
       {"CHANDRAYAAN-1_MRFFR", "mrffr"},
@@ -41,6 +41,7 @@ namespace SpiceQL {
       {"CASSINI_ISS_WAC", "cassini"},
       {"CASSINI_VIMS_V", "cassini"},
       {"Cassini-Huygens", "cassini"},
+      {"CONTEXT CAMERA", "ctx"},
       {"DAWN_FC2_FILTER_1", "fc2"},
       {"DAWN_FC2_FILTER_2", "fc2"},
       {"DAWN_FC2_FILTER_3", "fc2"},
@@ -152,6 +153,8 @@ namespace SpiceQL {
       {"CLEM_NIR", "nir"},
       {"CH2", "chandrayaan2"},
       {"CH-2", "chandrayaan2"},
+      {"CH2_TMC_NADIR", "tmc2"},
+      {"CH2_OHRC", "ohrc"},
       {"ROS_VIRTIS-M_IR", "virtis"},
       {"MSL_MASTCAM_LEFT", "msl"}
     };
@@ -846,7 +849,7 @@ namespace SpiceQL {
         json kernelsToLoad = {};
 
         if (mission != "" && searchKernels){
-            kernelsToLoad = Inventory::search_for_kernelset(mission, {"fk"}, default_StartTime, default_StopTime, default_KernelQualities, default_KernelQualities, fullKernelPath, limitCk, limitSpk);
+            kernelsToLoad = Inventory::search_for_kernelset(mission, {"fk", "ik", "iak"}, default_StartTime, default_StopTime, default_KernelQualities, default_KernelQualities, fullKernelPath, limitCk, limitSpk);
         }
         if (!kernelList.empty()) {
             json regexk = Inventory::search_for_kernelset_from_regex(kernelList, fullKernelPath);
