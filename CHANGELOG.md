@@ -43,6 +43,7 @@ release.
 
 - Added getTargetStatesRanged so a request can be made with start, end, and range of ETs instead of a list [#115](https://github.com/DOI-USGS/SpiceQL/pull/115)
 - Added option to json2DIntArrayTo2DVector to retain empty subarrays rather than remove them [#117](https://github.com/DOI-USGS/SpiceQL/pull/117)
+- Added support for ISD to kernel generation [#116](https://github.com/DOI-USGS/SpiceQL/pull/116)
 
 ### 1.2.7
 
