@@ -147,6 +147,44 @@ def test_getTargetOrientations_returns_expected_quaternion():
     assert response.status_code == 200
     assert response.json()["body"]["return"] == expected_return
 
+# ---------------------------------------------------------------------------
+# getTargetOrientationsRanged
+# ---------------------------------------------------------------------------
+
+def test_getTargetOrientationsRanged_returns_expected_quaternion():
+    expected_return = [
+        [
+            0.9999924134600601,
+            0.0005720078450331138,
+            0.003853027964066137,
+            -2.2039789431520754e-06,
+            0.0,
+            0.0,
+            0.0,
+        ],
+        [
+            0.9999924134600601,
+            0.0005720078450331138,
+            0.003853027964066137,
+            -2.2039789431520754e-06,
+            0.0,
+            0.0,
+            0.0,
+        ]
+    ]
+    with patch("pyspiceql.getTargetOrientationsRanged", return_value=(expected_return, CK_KERNELS)):
+        response = client.get("/getTargetOrientationsRanged", params={
+            "startEt": 690201375.8323615,
+            "stopEt": 690201375.8323615,
+            "numRecords": 2,
+            "toFrame": -74000,
+            "refFrame": -74690,
+            "mission": "ctx",
+            "searchKernels": "true",
+        })
+    assert response.status_code == 200
+    assert response.json()["body"]["return"] == expected_return
+
 
 # ---------------------------------------------------------------------------
 # strSclkToEt
