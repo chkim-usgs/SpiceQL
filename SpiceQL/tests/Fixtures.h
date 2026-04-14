@@ -123,3 +123,11 @@ class EnvVar : public ::testing::Test {
   struct SavedVar { string value; bool hadValue; };
   std::unordered_map<string, SavedVar> saved_;
 };
+
+class AliasMapTest : public TempTestingFiles {
+ protected:
+  void SetUp() override;
+  fs::path defaultAliasMapFile;
+  fs::path testAliasMapFile;
+  fs::path root;
+};
