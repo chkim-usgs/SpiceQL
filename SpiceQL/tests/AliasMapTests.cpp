@@ -27,16 +27,17 @@ TEST_F(AliasMapTest, InvalidAlias) {
 }
 
 TEST_F(AliasMapTest, EnsureInit) {
-	// Get mission without loading first will load default automatically
+	// Get mission without explicit loading, will load default automatically
+	setenv("SPICEQL_DEV_ALIAS", "true", 1);
 	EXPECT_EQ(get_mission("CH2_OHRC"), "ohrc");
 }
 
 TEST_F(AliasMapTest, PathParamOverridesEnvironment) {
-	setenv("SPICEQL_DEV_ALIAS", "false", 1);
+	setenv("SPICEQL_DEV_ALIAS", "true", 1);
 	EXPECT_EQ(get_mission("CH2_TMC_NADIR"), "tmc2");
 
 	// load test alias map
 	EXPECT_NO_THROW(load_aliases(testAliasMapFile.string()));
-	EXPECT_THROW((get_mission("CH2_TMC_NADIR"), "tmc2"), std::invalid_argument);
+	EXPECT_THROW(get_mission("CH2_TMC_NADIR"), std::invalid_argument);
 }
 
