@@ -33,42 +33,22 @@ namespace SpiceQL {
     double default_StopTime = std::numeric_limits<double>::max();
     vector<string> default_KernelQualities = {"smithed", "reconstructed"};
     
-    /**
-     * @brief Translates a given name using the aliasMap and checks if the name is in the frameList.
-     * 
-     * If the name exists as a key in aliasMap, returns the mapped value.
-     * If the name exists in frameList, returns the name itself.
-     * Otherwise, returns an empty string.
-     * 
-     * @param name The name to translate.
-     * @param frameList The list of valid frame names.
-     * @return The translated name or an empty string if not found.
-     */
     std::string getSpiceqlName(const std::string& name) {
-        try {
-            return get_mission(name);
-        } catch (invalid_argument e) {
-            SPDLOG_INFO("Unable to get SpiceQL name from aliases: {}", e.what());
-
-            // Check if name is in frameList
-            for (const auto& frame : frameList()) {
-                if (frame == name) {
-                    return name;
-                }
-            }
-        }
-
-        // Not found
-        return "";
+        return AliasMap::instance().getSpiceqlName(name);
     }
 
+    void addAliasKey(const std::string& key, const std::string& value) {
+        AliasMap::instance().addAliasKey(key, value);
+    }
+
+    nlohmann::json getAliasMap() {
+        return AliasMap::instance().getAliasMap();
+    }
+
+    void setAliasMap(const nlohmann::json& newAliasMap) {
+        AliasMap::instance().setAliasMap(newAliasMap);
+    }
     
-    /**
-     * @brief URL encodes a given string.
-     * 
-     * @param value The string to encode.
-     * @return The encoded string.
-     */
     std::string url_encode(const std::string &value) {
         std::ostringstream escaped;
         escaped.fill('0');

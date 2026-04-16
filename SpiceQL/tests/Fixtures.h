@@ -6,6 +6,7 @@
 #include <ghc/fs_std.hpp>
 
 #include "spice_types.h"
+#include "alias_map.h"
 
 using namespace std;
 using namespace SpiceQL;
@@ -127,6 +128,7 @@ class EnvVar : public ::testing::Test {
 class AliasMapTest : public TempTestingFiles {
  protected:
   void SetUp() override;
+  AliasMap& aliasMap = AliasMap::instance();
   fs::path defaultAliasMapFile;
   fs::path testAliasMapFile;
   fs::path root;
