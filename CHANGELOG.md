@@ -34,6 +34,8 @@ release.
 -->
 ### unreleased
 
+### 1.3.0
+
 ### Changed
 - Refactored the aliasMap variable into a JSON file that can be dynamically loaded and accessed [#120](https://github.com/DOI-USGS/SpiceQL/pull/120)
 
