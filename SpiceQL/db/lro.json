@@ -18,7 +18,10 @@
   "moc" : {
       "ck" : {
           "reconstructed" : {
-              "kernels": ["moc42r?_[0-9]{7}_[0-9]{7}_v[0-9]{2}.bc$"]
+            "kernels": ["moc42r?_[0-9]{7}_[0-9]{7}_v[0-9]{2}.bc$"]
+          },
+          "smithed" : {
+            "kernels": ["LROC_NPOLE_2017Merged_Lidar2Image_.*_ck.bc$","LRONAC_SPole_.*_ck.bc$"]
           }
       },
       "spk" : {
@@ -35,9 +38,6 @@
     "ck" : {
       "reconstructed" : {
         "kernels" : [ "soc31_[0-9]{7}_[0-9]{7}_v[0-9]{2}.bc$", "lrolc_[0-9]{7}_[0-9]{7}_v[0-9]{2}.bc$"]
-      },
-      "smithed" : {
-        "kernels": ["LROC_NPOLE_2017Merged_Lidar2Image_.*_ck.bc$","LRONAC_SPole_.*_ck.bc$"]
       }
     },
     "ik" : {
