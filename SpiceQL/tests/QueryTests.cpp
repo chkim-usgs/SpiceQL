@@ -247,7 +247,20 @@ TEST_F(IsisDataDirectory, FunctionalTestLroConf) {
   // check a kernel from each regex exists in their quality groups
   vector<string> kernelToCheck =  SpiceQL::getKernelsAsVector(res.at("moc").at("ck").at("reconstructed").at("kernels"));
   vector<string> expected = {tempDir/"lro"/"kernels"/ "ck" / "moc42r_2016305_2016336_v01.bc"};
-  SPDLOG_DEBUG("Checking CKs");
+  SPDLOG_DEBUG("Checking Recon CKs");
+  for (auto &e : expected) { 
+    auto it = find(kernelToCheck.begin(), kernelToCheck.end(), e);
+    if (it == kernelToCheck.end()) {
+      throw runtime_error(e+" was not found in the kernel results");
+    }
+  }
+
+  SPDLOG_DEBUG("Checking Smithed CKs");
+  kernelToCheck =  SpiceQL::getKernelsAsVector(res.at("moc").at("ck").at("smithed").at("kernels"));
+  expected = {
+    tempDir/"lro"/"kernels"/ "ck" /"LROC_NPOLE_2017Merged_Lidar2Image_Left_ck.bc",
+    tempDir/"lro"/"kernels"/ "ck" /"LRONAC_SPole_LE_2009_ck.bc"
+  };
   for (auto &e : expected) { 
     auto it = find(kernelToCheck.begin(), kernelToCheck.end(), e);
     if (it == kernelToCheck.end()) {
@@ -268,8 +281,10 @@ TEST_F(IsisDataDirectory, FunctionalTestLroConf) {
   SPDLOG_DEBUG("Checking Smithed SPKs");
   kernelToCheck = getKernelsAsVector(res.at("moc").at("spk").at("smithed")); 
   expected = {tempDir/"lro"/"kernels"/ "spk" /"LRO_ES_05_201308_GRGM660PRIMAT270.bsp", 
-              tempDir/"lro"/"kernels"/ "spk" /"LRO_ES_16_201406_GRGM900C_L600.BSP"};
-
+              tempDir/"lro"/"kernels"/ "spk" /"LRO_ES_16_201406_GRGM900C_L600.BSP",
+              tempDir/"lro"/"kernels"/ "spk" /"LROC_NPOLE_2017Merged_Lidar2Image_Left_spk.bsp",
+              tempDir/"lro"/"kernels"/ "spk" /"LRONAC_SPole_RE_2013_spk.bsp"
+  };
   for (auto &e : expected) { 
     auto it = find(kernelToCheck.begin(), kernelToCheck.end(), e);
     if (it == kernelToCheck.end()) {
