@@ -355,7 +355,11 @@ void LroKernelSet::SetUp() {
     "moc" : {
         "ck" : {
             "reconstructed" : {
-                "kernels": ["soc31.*.bc", "lrolc.*.bc"]
+                "kernels": [
+                "soc31.*.bc", 
+                "lrolc.*.bc", 
+                "LROC_NPOLE_.*_ck.bc",
+                "LRONAC_SPole_.*_ck.bc"]
             },
             "deps" : {
             "sclk" : ["lro_clkcor_[0-9]{7}_v[0-9]{2}.tsc"],
@@ -363,25 +367,29 @@ void LroKernelSet::SetUp() {
             }
         },
         "spk" : {
-        "reconstructed" : {
-            "kernels" : ["fdf29_[0-9]{7}_[0-9]{7}_[0-9]{3}.bsp", "fdf29r_[0-9]{7}_[0-9]{7}_[0-9]{3}.bsp"]
-        },
-        "smithed" : {
-            "kernels" : ["LRO_.*_GRGM660.*.bsp", "LRO_.*_GRGM900C.*.BSP"]
-        },
-        "deps" : {
-            "sclk" : ["lro_clkcor_[0-9]{7}_v[0-9]{2}.tsc"],
-            "objs" : ["/base/lsk", "/moc/sclk"]
-        }
+          "reconstructed" : {
+              "kernels" : ["fdf29_[0-9]{7}_[0-9]{7}_[0-9]{3}.bsp", "fdf29r_[0-9]{7}_[0-9]{7}_[0-9]{3}.bsp"]
+          },
+          "smithed" : {
+              "kernels" : [
+                "LRO_.*_GRGM660.*.bsp",
+                "LRO_.*_GRGM900C.*.BSP",
+                "LROC_NPOLE_.*_spk.bsp",
+                "LRONAC_SPole_.*_spk.bsp"]
+          },
+          "deps" : {
+              "sclk" : ["lro_clkcor_[0-9]{7}_v[0-9]{2}.tsc"],
+              "objs" : ["/base/lsk", "/moc/sclk"]
+          }
         },
         "sclk" : {
-        "kernels" : ["lro_clkcor_[0-9]{7}_v[0-9]{2}.tsc"]
+          "kernels" : ["lro_clkcor_[0-9]{7}_v[0-9]{2}.tsc"]
         },
         "fk" : {
-        "kernels" : ["lro_frames_[0-9]{7}_v[0-9]{2}.tf"]
+          "kernels" : ["lro_frames_[0-9]{7}_v[0-9]{2}.tf"]
         },
         "ik" : {
-        "kernels" : ["lro_instruments_v[0-9]{2}.ti"]
+          "kernels" : ["lro_instruments_v[0-9]{2}.ti"]
         }
     }
 })"_json;
