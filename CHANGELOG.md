@@ -36,6 +36,7 @@ release.
 
 ### Fixed
 - Fixed LRO smithed kernels for north and south pole database by moving them from lroc to moc [#124](https://github.com/DOI-USGS/SpiceQL/pull/124)
+- Removed extraneous LROC_NPOLE kernels from isisKernelList.txt [#125](https://github.com/DOI-USGS/SpiceQL/pull/125)
 
 ### 1.3.0
 
