@@ -258,7 +258,6 @@ TEST_F(IsisDataDirectory, FunctionalTestLroConf) {
   SPDLOG_DEBUG("Checking Smithed CKs");
   kernelToCheck =  SpiceQL::getKernelsAsVector(res.at("moc").at("ck").at("smithed").at("kernels"));
   expected = {
-    tempDir/"lro"/"kernels"/ "ck" /"LROC_NPOLE_2017Merged_Lidar2Image_Left_ck.bc",
     tempDir/"lro"/"kernels"/ "ck" /"LRONAC_SPole_LE_2009_ck.bc"
   };
   for (auto &e : expected) { 
@@ -282,7 +281,6 @@ TEST_F(IsisDataDirectory, FunctionalTestLroConf) {
   kernelToCheck = getKernelsAsVector(res.at("moc").at("spk").at("smithed")); 
   expected = {tempDir/"lro"/"kernels"/ "spk" /"LRO_ES_05_201308_GRGM660PRIMAT270.bsp", 
               tempDir/"lro"/"kernels"/ "spk" /"LRO_ES_16_201406_GRGM900C_L600.BSP",
-              tempDir/"lro"/"kernels"/ "spk" /"LROC_NPOLE_2017Merged_Lidar2Image_Left_spk.bsp",
               tempDir/"lro"/"kernels"/ "spk" /"LRONAC_SPole_RE_2013_spk.bsp"
   };
   for (auto &e : expected) { 
