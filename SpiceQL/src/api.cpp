@@ -653,15 +653,22 @@ namespace SpiceQL {
         }
 
         json lsks = {};
-
+        
         // get lsk kernel
         if (searchKernels) {
             lsks = Inventory::search_for_kernelset("base", {"lsk"}, default_StartTime, default_StopTime, default_KernelQualities, default_KernelQualities, fullKernelPath, limitCk, limitSpk);
         }
+        
         if (!kernelList.empty()) {
             json regexk = Inventory::search_for_kernelset_from_regex(kernelList, fullKernelPath);
             // merge them into the ephem kernels overwriting anything found in the query
             merge_json(lsks, regexk);
+        }
+        
+        // if we're not searching for kernels and not using the web, we still need to load an lsk to do the conversion
+        if(useWeb == false && searchKernels == false && kernelList.empty()) {
+            SPDLOG_TRACE("No kernels provided, loading default LSK");
+            lsks["lsk"] = json::array({getDefaultLsk()});
         }
         
         KernelSet lsk(lsks);
@@ -694,7 +701,7 @@ namespace SpiceQL {
         }   
        
         json lsks = {};
-
+        
         // get lsk kernel
         if (searchKernels) {
             lsks = Inventory::search_for_kernelset("base", {"lsk"}, default_StartTime, default_StopTime, default_KernelQualities, default_KernelQualities, fullKernelPath, limitCk, limitSpk);
@@ -703,6 +710,12 @@ namespace SpiceQL {
             json regexk = Inventory::search_for_kernelset_from_regex(kernelList, fullKernelPath);
             // merge them into the ephem kernels overwriting anything found in the query
             merge_json(lsks, regexk);
+        }
+
+        // if we're not searching for kernels and not using the web, we still need to load an lsk to do the conversion
+        if(useWeb == false && searchKernels == false && kernelList.empty()) {
+            SPDLOG_TRACE("No kernels provided, loading default LSK");
+            lsks["lsk"] = json::array({getDefaultLsk()});
         }
 
         KernelSet lsk(lsks);
