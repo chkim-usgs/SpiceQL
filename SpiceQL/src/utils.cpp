@@ -9,6 +9,7 @@
 #include <regex>
 #include <chrono>
 #include <float.h>
+#include <unistd.h>  // getpid
 
 #include <SpiceUsr.h>
 #include <SpiceZfc.h>
@@ -22,15 +23,15 @@
 #include <fmt/ranges.h>
 
 #include <nlohmann/json.hpp>
-#include <spdlog/spdlog.h>
+#include <SpiceQL/spiceql_logging.h>
 
-#include "config.h"
-#include "memo.h"
-#include "memoized_functions.h"
-#include "query.h"
-#include "spice_types.h"
-#include "utils.h"
-#include "inventory.h"
+#include <SpiceQL/config.h>
+#include <SpiceQL/memo.h>
+#include <SpiceQL/memoized_functions.h>
+#include <SpiceQL/query.h>
+#include <SpiceQL/spice_types.h>
+#include <SpiceQL/utils.h>
+#include <SpiceQL/inventory.h>
 
 using json = nlohmann::json;
 using namespace std;

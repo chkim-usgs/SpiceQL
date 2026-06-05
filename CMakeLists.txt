@@ -28,7 +28,7 @@ list(APPEND CMAKE_FIND_ROOT_PATH /var/lang/)
 message(STATUS "find path: " ${CMAKE_FIND_ROOT_PATH})
 
 # Variables required by multiple build options
-set(SPICEQL_BUILD_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/SpiceQL/include/")
+set(SPICEQL_BUILD_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/SpiceQL/include/SpiceQL")
 
 set(default_build_type "Release")
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -58,7 +58,6 @@ if(SPICEQL_BUILD_LIB)
   find_package(cspice REQUIRED)
   find_package(fmt REQUIRED)
   find_package(cereal REQUIRED)
-  find_package(spdlog REQUIRED)
   find_package(HighFive REQUIRED)
   find_package(CURL REQUIRED)
 
@@ -133,24 +132,30 @@ if(SPICEQL_BUILD_LIB)
 
   set(SPICEQL_KERNELS ${CMAKE_CURRENT_SOURCE_DIR}/SpiceQL/db/kernels/naif0012.tls)
 
-  configure_file (${CMAKE_CURRENT_SOURCE_DIR}/SpiceQL/include/version.h.in ${CMAKE_CURRENT_SOURCE_DIR}/SpiceQL/include/version.h @ONLY)
+  # Generate the version header into the build tree (not the source tree) and
+  # reach it as <SpiceQL/spiceql_version.h> via the build-dir include path below.
+  configure_file (${CMAKE_CURRENT_SOURCE_DIR}/SpiceQL/include/SpiceQL/spiceql_version.h.in ${CMAKE_BINARY_DIR}/SpiceQL/spiceql_version.h @ONLY)
   add_library(SpiceQL SHARED ${SPICEQL_SRC_FILES})
 
   set_target_properties(SpiceQL PROPERTIES
                                   VERSION ${PROJECT_VERSION}
                                   SOVERSION 0)
 
-  target_compile_definitions(SpiceQL PRIVATE SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE 
-                                     PUBLIC -D_SOURCE_PREFIX="${CMAKE_CURRENT_SOURCE_DIR}")
+  # spdlog dependency removed: see SpiceQL/include/spiceql_logging.h. Logging is
+  # now a small self-contained logger using fmt, so no SPDLOG_ACTIVE_LEVEL is
+  # needed.
+  target_compile_definitions(SpiceQL PUBLIC -D_SOURCE_PREFIX="${CMAKE_CURRENT_SOURCE_DIR}")
 
 get_target_property(CSPICE_INCLUDE_DIRS CSPICE::cspice INTERFACE_INCLUDE_DIRECTORIES)
 
 target_include_directories(SpiceQL
                             PUBLIC
                             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SpiceQL/include>
+                            $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
                             $<INSTALL_INTERFACE:include>
                             PRIVATE
                             ${CMAKE_CURRENT_SOURCE_DIR}/submodules/BTree/include/
+                            ${CMAKE_CURRENT_SOURCE_DIR}/submodules/gularkfilesystem/include/
                             cereal
                             ${CSPICE_INCLUDE_DIRS}
                             )
@@ -161,13 +166,11 @@ target_include_directories(SpiceQL
                         nlohmann_json::nlohmann_json
                         PRIVATE
                         CSPICE::cspice
-                        spdlog::spdlog_header_only
                         HighFive
                         ${CURL_LIBRARIES}
                         )
    
   install(TARGETS SpiceQL LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
-  install(DIRECTORY ${SPICEQL_INCLUDE_DIR} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
   # Generate the package config
   configure_file(cmake/config.cmake.in
@@ -191,15 +194,8 @@ target_include_directories(SpiceQL
   install(FILES ${SPICEQL_KERNELS} DESTINATION "etc/SpiceQL/db/kernels")
 
   # Install the library
-  install(TARGETS SpiceQL nlohmann_json ghc_filesystem
-          EXPORT spiceQLTargets
-          LIBRARY  DESTINATION ${CMAKE_INSTALL_LIBDIR}
-          INCLUDES DESTINATION ${SPICEQL_INSTALL_INCLUDE_DIR})
-
-  # Install the target
-  install(EXPORT spiceQLTargets
-          NAMESPACE spice::
-          DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
+  install(TARGETS SpiceQL
+          LIBRARY  DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 else()
   message(STATUS "Skipping Library")
