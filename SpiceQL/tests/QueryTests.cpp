@@ -237,6 +237,75 @@ TEST_F(IsisDataDirectory, FunctionalTestsLroKernelList) {
 
 TEST_F(IsisDataDirectory, FunctionalTestsCH2KernelList) { 
   compareKernelSets("chandrayaan2", {});
+
+  nlohmann::json conf = getMissionConfig("chandrayaan2");
+  nlohmann::json res = listMissionKernels(tempDir, conf);
+  SPDLOG_DEBUG("Kernel Results: {}", res.dump(4));
+  // check a kernel from each regex exists in their quality groups
+  vector<string> kernelToCheck =  SpiceQL::getKernelsAsVector(res.at("chandrayaan2").at("spk").at("reconstructed").at("kernels"));
+  vector<string> expected = {
+    tempDir/"chandrayaan2"/"kernels"/ "spk" / "ch2_orb_31Mar2020_02May2020_v1.bsp",
+    tempDir/"chandrayaan2"/"kernels"/ "spk" / "ch2_eph_30Sep2025_02Nov2025_v1.bsp"};
+  SPDLOG_DEBUG("Checking TMC2 SPKs");
+  for (auto &e : expected) {
+    auto it = find(kernelToCheck.begin(), kernelToCheck.end(), e);
+    if (it == kernelToCheck.end()) {
+      throw runtime_error(e+" was not found in the kernel results");
+    }
+  }
+
+  kernelToCheck =  SpiceQL::getKernelsAsVector(res.at("chandrayaan2").at("ck").at("reconstructed").at("kernels"));
+  expected = {
+    tempDir/"chandrayaan2"/"kernels"/ "ck" / "ch2_att_01Sep2019_02Oct2019_v1.bc",
+    tempDir/"chandrayaan2"/"kernels"/ "ck" / "ch2_att_27Mar2021_04May2021_v1.bc",
+    tempDir/"chandrayaan2"/"kernels"/ "ck" / "ch2_att_29Nov2020_04Jan2021_v1.bc"};
+  SPDLOG_DEBUG("Checking OHRC CKs");
+  for (auto &e : expected) { 
+    auto it = find(kernelToCheck.begin(), kernelToCheck.end(), e);
+    if (it == kernelToCheck.end()) {
+      throw runtime_error(e+" was not found in the kernel results");
+    }
+  }
+
+  kernelToCheck =  SpiceQL::getKernelsAsVector(res.at("tmc2").at("iak").at("kernels"));
+  expected = {tempDir/"chandrayaan2"/"kernels"/ "iak" / "tmc2Addendum001.ti"};
+  SPDLOG_DEBUG("Checking TMC2 IAKs");
+  for (auto &e : expected) { 
+    auto it = find(kernelToCheck.begin(), kernelToCheck.end(), e);
+    if (it == kernelToCheck.end()) {
+      throw runtime_error(e+" was not found in the kernel results");
+    }
+  }
+
+  kernelToCheck =  SpiceQL::getKernelsAsVector(res.at("ohrc").at("iak").at("kernels"));
+  expected = {tempDir/"chandrayaan2"/"kernels"/ "iak" / "ohrcAddendum001.ti"};
+  SPDLOG_DEBUG("Checking OHRC IAKs");
+  for (auto &e : expected) { 
+    auto it = find(kernelToCheck.begin(), kernelToCheck.end(), e);
+    if (it == kernelToCheck.end()) {
+      throw runtime_error(e+" was not found in the kernel results");
+    }
+  }
+
+  kernelToCheck =  SpiceQL::getKernelsAsVector(res.at("chandrayaan2").at("fk").at("kernels"));
+  expected = {tempDir/"chandrayaan2"/"kernels"/ "fk" / "ch2_v01.tf"};
+  SPDLOG_DEBUG("Checking CH2 FKs");
+  for (auto &e : expected) { 
+    auto it = find(kernelToCheck.begin(), kernelToCheck.end(), e);
+    if (it == kernelToCheck.end()) {
+      throw runtime_error(e+" was not found in the kernel results");
+    }
+  }
+
+  kernelToCheck =  SpiceQL::getKernelsAsVector(res.at("chandrayaan2").at("sclk").at("kernels"));
+  expected = {tempDir/"chandrayaan2"/"kernels"/ "sclk" / "ch2_sclk_v1.tsc"};
+  SPDLOG_DEBUG("Checking CH2 SCLKs");
+  for (auto &e : expected) { 
+    auto it = find(kernelToCheck.begin(), kernelToCheck.end(), e);
+    if (it == kernelToCheck.end()) {
+      throw runtime_error(e+" was not found in the kernel results");
+    }
+  }
 }
 
 TEST_F(IsisDataDirectory, FunctionalTestLroConf) {
