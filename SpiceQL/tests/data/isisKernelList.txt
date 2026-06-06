@@ -15211,5 +15211,6 @@ chandrayaan2/kernels/spk/ch2_eph_30Mar2025_02May2025_v1.bsp
 chandrayaan2/kernels/spk/ch2_eph_30May2025_02Jul2025_v1.bsp
 chandrayaan2/kernels/spk/ch2_eph_30Sep2025_02Nov2025_v1.bsp
 chandrayaan2/kernels/iak/tmc2Addendum001.ti
+chandrayaan2/kernels/iak/ohrcAddendum001.ti
 chandrayaan2/kernels/fk/ch2_v01.tf
 chandrayaan2/kernels/sclk/ch2_sclk_v1.tsc
