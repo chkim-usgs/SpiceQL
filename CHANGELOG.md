@@ -42,6 +42,7 @@ release.
 - Added clipper kernel DB. [#127](https://github.com/DOI-USGS/SpiceQL/pull/127)
 - Added chandrayaan2 eph spks to chandrayaan2 db [#128](https://github.com/DOI-USGS/SpiceQL/pull/128)
 - Added Windows build support: explicit filesystem path string conversions and a Windows CI job, reconciled on top of the new logger [#131](https://github.com/DOI-USGS/SpiceQL/pull/131)
+- Added JSON schema for kernel reports returned by SpiceQL API functions. [#81](https://github.com/DOI-USGS/SpiceQL/issues/81)
 
 ### Changed
 - UTC/ET conversion functions (`utcToEt` and `etToUtc`) now use utcet library when no kernels are searched or provided, falling back to LSK kernels when explicitly requested
