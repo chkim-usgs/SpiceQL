@@ -156,6 +156,7 @@ target_include_directories(SpiceQL
                             PRIVATE
                             ${CMAKE_CURRENT_SOURCE_DIR}/submodules/BTree/include/
                             ${CMAKE_CURRENT_SOURCE_DIR}/submodules/gularkfilesystem/include/
+                            ${CMAKE_CURRENT_SOURCE_DIR}/submodules/utcet/
                             cereal
                             ${CSPICE_INCLUDE_DIRS}
                             )
