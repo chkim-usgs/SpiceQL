@@ -34,6 +34,9 @@ release.
 -->
 ### unreleased
 
+### Added 
+- Added kernel introspection functions [#142](https://github.com/DOI-USGS/SpiceQL/pull/142)
+
 ## Fixed 
 - Made updates to utcet to match cspice imeplementation [#141](https://github.com/DOI-USGS/SpiceQL/pull/141)
 
