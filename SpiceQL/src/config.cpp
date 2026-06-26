@@ -1,6 +1,7 @@
 #include <SpiceQL/config.h>
 #include <SpiceQL/query.h>
 #include <SpiceQL/memoized_functions.h>
+#include <SpiceQL/inventory.h>
 
 #include <time.h>
 
@@ -14,15 +15,9 @@ using namespace std;
 using json = nlohmann::json;
 
 namespace SpiceQL {
-  
-  vector<string> frameList() { 
-    vector<string> frames;
-    auto conf = Config().globalConf();
-    for (auto &frame : conf.items()) {
-      SPDLOG_TRACE("Adding Frame: {}", frame.key());
-      frames.push_back(frame.key());
-    }
-    return frames;
+
+  vector<string> frameList() {
+    return Inventory::getFrameList();
   }
 
 

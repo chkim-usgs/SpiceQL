@@ -1,6 +1,9 @@
 #include <fstream>
+#include <algorithm>
 
 #include <gtest/gtest.h>
+
+#include <ghc/fs_std.hpp>
 
 #include "Fixtures.h"
 
@@ -8,6 +11,7 @@
 #include <SpiceQL/utils.h>
 #include <SpiceQL/query.h>
 #include <SpiceQL/memo.h>
+#include <SpiceQL/inventory.h>
 
 using namespace std;
 using json = nlohmann::json;
@@ -58,5 +62,39 @@ TEST_F(IsisDataDirectory, FunctionalTestConfigEval) {
   expected_number = 4;
   EXPECT_EQ(SpiceQL::getKernelsAsVector(config_eval_res[pointer]).size(), expected_number);
   EXPECT_EQ(testConfig[pointer.to_string()].size(), 1);
+}
+
+
+TEST_F(LroKernelSet, FrameListCacheMatchesConfig) {
+  Inventory::create_database();
+
+  vector<string> fromConfig;
+  json globalConf = Config().globalConf();
+  for (auto& f : globalConf.items()) {
+    fromConfig.push_back(f.key());
+  }
+  sort(fromConfig.begin(), fromConfig.end());
+
+  vector<string> fromCache = frameList();
+  sort(fromCache.begin(), fromCache.end());
+
+  EXPECT_EQ(fromCache, fromConfig);
+  EXPECT_FALSE(fromCache.empty());
+}
+
+
+TEST_F(LroKernelSet, FrameCodeNameCacheBidirectional) {
+  Inventory::create_database();
+
+  EXPECT_EQ(Inventory::getFrameNameFromCache(-85), "LRO");
+  EXPECT_EQ(Inventory::getFrameCodeFromCache("LRO"), -85);
+
+  EXPECT_EQ(Inventory::getFrameNameFromCache(-85600), "LRO_LROCNACL");
+  EXPECT_EQ(Inventory::getFrameCodeFromCache("LRO_LROCNACL"), -85600);
+
+  EXPECT_EQ(Inventory::getFrameCodeFromCache("lro"), -85);
+
+  EXPECT_EQ(Inventory::getFrameNameFromCache(0), "");
+  EXPECT_EQ(Inventory::getFrameCodeFromCache("NOT_A_FRAME"), 0);
 }
 
