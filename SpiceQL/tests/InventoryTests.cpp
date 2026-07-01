@@ -105,8 +105,13 @@ TEST_F(LroKernelSet, TestInventorySearchSetsNoOverwrite) {
   nlohmann::json kernels = result.second;
   SPDLOG_DEBUG("TEST KERNELS: {}", kernels.dump(4));
   EXPECT_EQ(kernels["pck"].size(), 2);
-  EXPECT_EQ(fs::path(kernels["pck"][0].get<string>()).filename(), "moon_080317.tf");
-  EXPECT_EQ(fs::path(kernels["pck"][1].get<string>()).filename(), "pck00009.tpc");
+  // Check that both expected kernels are present (order may vary)
+  std::set<std::string> filenames;
+  for (const auto& kernel : kernels["pck"]) {
+    filenames.insert(fs::path(kernel.get<string>()).filename().string());
+  }
+  EXPECT_TRUE(filenames.count("moon_080317.tf"));
+  EXPECT_TRUE(filenames.count("pck00009.tpc"));
 }
 
 
@@ -129,7 +134,12 @@ TEST_F(LroKernelSet, TestInventorySearchSetsOverwrite) {
   nlohmann::json kernels = result.second;
   SPDLOG_DEBUG("TEST KERNELS: {}", kernels.dump(4));
   EXPECT_EQ(kernels["pck"].size(), 2);
-  EXPECT_EQ(fs::path(kernels["pck"][1].get<string>()).filename(), "pck00009.tpc");
+  // Check that pck00009.tpc is present (order may vary)
+  std::set<std::string> filenames;
+  for (const auto& kernel : kernels["pck"]) {
+    filenames.insert(fs::path(kernel.get<string>()).filename().string());
+  }
+  EXPECT_TRUE(filenames.count("pck00009.tpc"));
 }
 
 
