@@ -34,6 +34,9 @@ release.
 -->
 ### unreleased
 
+### Fixed
+- Fixed empty mission param bug so getCacheDir() will auto-initialize [#144](https://github.com/DOI-USGS/SpiceQL/pull/144)
+
 ## 1.5.0 - 2026-06-27
 
 ### Added 
