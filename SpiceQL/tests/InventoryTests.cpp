@@ -166,12 +166,13 @@ TEST_F(TempTestingFiles, TestInventorySetCacheDirOverride) {
 
 TEST(TestInventory, GetCacheDirAutoInitialize) {
   // Test getCacheDir auto-initialization
-  
+
   // Save original state
   const char* original_cache_dir = getenv("SPICEQL_CACHE_DIR");
 
-  // Clear the environment variable and reset internal state
+  // Clear the environment variable and force reset internal cache directory
   unsetenv("SPICEQL_CACHE_DIR");
+  SpiceQL::setCacheDir("", true);  // Reset internal state to trigger auto-init path
 
   // getCacheDir should auto-initialize with a temp directory instead of throwing
   std::string cache_dir;
