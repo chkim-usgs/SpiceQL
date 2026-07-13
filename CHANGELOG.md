@@ -34,6 +34,8 @@ release.
 -->
 ### Unreleased
 
+## 1.6.0 - 2026-07-13
+
 ### Added
 - Added `formatKernels()` utility function to organize a list of kernel file paths into a JSON object grouped by kernel type. [#101](https://github.com/DOI-USGS/SpiceQL/issues/101)
 
@@ -46,7 +48,6 @@ release.
 - Added kernel introspection functions [#142](https://github.com/DOI-USGS/SpiceQL/pull/142)
 - made Mission parameter optional [#140](https://github.com/DOI-USGS/SpiceQL/pull/140)
 - Added `getLoadedKernels` and `isLskLoaded` to inspect the CSPICE kernel pool
-
 
 ### Fixed 
 - Made updates to utcet to match cspice imeplementation [#141](https://github.com/DOI-USGS/SpiceQL/pull/141)
