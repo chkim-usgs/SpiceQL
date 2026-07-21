@@ -375,6 +375,38 @@ namespace SpiceQL {
         int limitCk=-1, 
         int limitSpk=1,
         std::vector<std::string> kernelList={});
+    
+    /**
+     * @brief Converts ephemeris times to encoded SCLK "ticks" (doubles)
+     *
+     * Given a spacecraft clock id, converts a vector of ephemeris times to the
+     * continuous encoded spacecraft clock values (ticks) produced by NAIF's
+     * sce2c_c. These are the values CK writers (e.g. ckw03_c) expect. Unlike
+     * doubleEtToSclk, which returns the human-readable clock string via sce2s_c,
+     * this returns the encoded double directly so callers can write CK segments
+     * without furnishing the SCLK/LSK themselves.
+     *
+     * @param frameCode int Spacecraft clock id (e.g. -74 for MRO)
+     * @param ets vector<double> ephemeris times to convert
+     * @param mission string Mission name as it relates to the config files
+     * @param useWeb bool Whether to run the conversion via the remote web service
+     * @param searchKernels bool Whether to search the kernels for the user
+     * @param fullKernelPath bool if true returns full kernel paths, default returns relative paths
+     * @param limitCk int number of cks to limit to, default is -1 to retrieve all
+     * @param limitSpk int number of spks to limit to, default is 1 to retrieve only one
+     * @param kernelList vector<string> vector of additional kernels to load
+     * @return vector<double> of encoded SCLK ticks matching the input ets
+     */
+    std::pair<std::vector<double>, nlohmann::json> etsToSclkTicks(
+        int frameCode,
+        std::vector<double> ets,
+        std::string mission="",
+        bool useWeb=false,
+        bool searchKernels=true,
+        bool fullKernelPath=false,
+        int limitCk=-1,
+        int limitSpk=1,
+        std::vector<std::string> kernelList={});
 
     /**
      * @brief Switch between NAIF frame string name to integer frame code

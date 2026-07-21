@@ -163,9 +163,14 @@ namespace SpiceQL {
       * @param referenceFrame NAIF string for the reference frame the orientations are in
       * @param segmentId Some ID to give the segment
       * @param sclk path to S clock kernal to convert to and from ephemeris time
-      * @param lsk path to leap second kernal 
+      * @param lsk path to leap second kernel
       * @param angularVelocity optional, nx3 array of angular velocities
       * @param comment optional, comment to be associated with the segment
+      * @param timesAreTicks optional, if true the times are already encoded SCLK
+      *        ticks (as produced by sce2c_c / etsToSclkTicks) and no ET->SCLK
+      *        conversion is performed. In this mode the sclk and lsk kernels are
+      *        not furnished, allowing CK generation without a local SPICE data
+      *        directory (e.g. when the encoding was done via the web service).
       */
     void writeCk(std::string fileName,
                  std::vector<std::vector<double>> quats,
@@ -176,7 +181,8 @@ namespace SpiceQL {
                  std::string sclk,
                  std::string lsk,
                  std::vector<std::vector<double>> angularVelocity = {},
-                 std::string comment = "");
+                 std::string comment = "",
+                 bool timesAreTicks = false);
 
 
     /**

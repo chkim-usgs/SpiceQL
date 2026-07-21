@@ -571,7 +571,7 @@ namespace SpiceQL {
     }
 
 
-   pair<string, json> doubleEtToSclk(int frameCode, double et, string mission, bool useWeb, bool searchKernels, bool fullKernelPath, int limitCk, int limitSpk, vector<string> kernelList) {
+    pair<string, json> doubleEtToSclk(int frameCode, double et, string mission, bool useWeb, bool searchKernels, bool fullKernelPath, int limitCk, int limitSpk, vector<string> kernelList) {
         SPDLOG_TRACE("calling doubleEtToSclk({}, {}, {}, {}, {}, {})", frameCode, et, mission, useWeb, searchKernels, kernelList.size());
 
         json ephemKernels;
@@ -613,7 +613,7 @@ namespace SpiceQL {
         SPDLOG_DEBUG("strsclktoet({}, {}, {}) -> {}", frameCode, mission, sclk, et);
 
         return make_pair(string(sclk), ephemKernels);
-   }
+    }
 
 
     pair<double, json> doubleSclkToEt(int frameCode, double sclk, string mission, bool useWeb, bool searchKernels, bool fullKernelPath, int limitCk, int limitSpk, vector<string> kernelList) {
@@ -761,6 +761,56 @@ namespace SpiceQL {
         }
 
         return {utc_string, lsks};
+    }
+
+
+    pair<vector<double>, json> etsToSclkTicks(int frameCode, vector<double> ets, string mission, bool useWeb, bool searchKernels, bool fullKernelPath, int limitCk, int limitSpk, vector<string> kernelList) {
+        SPDLOG_TRACE("calling etsToSclkTicks({}, {} ets, {}, {}, {}, {})", frameCode, ets.size(), mission, useWeb, searchKernels, kernelList.size());
+
+        json ephemKernels;
+
+        if (useWeb) {
+            json args = json::object({
+                {"frameCode", frameCode},
+                {"ets", ets},
+                {"mission", mission},
+                {"searchKernels", searchKernels},
+                {"fullKernelPath", fullKernelPath},
+                {"limitCk", limitCk},
+                {"limitSpk", limitSpk},
+                {"kernelList", kernelList}
+            });
+            json out = spiceAPIQuery("etsToSclkTicks", args);
+            vector<double> result = out["body"]["return"].get<vector<double>>();
+            return make_pair(result, out["body"]["kernels"]);
+        }
+
+        if (mission.empty()) mission = inferMission({}, {frameCode});
+
+        if (searchKernels) {
+            ephemKernels = Inventory::search_for_kernelsets({"base", mission}, {"fk", "lsk", "sclk"}, default_StartTime, default_StopTime, default_KernelQualities, default_KernelQualities, fullKernelPath, limitCk, limitSpk);
+        }
+
+        if (!kernelList.empty()) {
+            json regexk = Inventory::search_for_kernelset_from_regex(kernelList, fullKernelPath);
+            // merge them into the ephem kernels overwriting anything found in the query
+            merge_json(ephemKernels, regexk);
+        }
+
+        KernelSet sclkSet(ephemKernels);
+
+        vector<double> ticks;
+        ticks.reserve(ets.size());
+        for (double et : ets) {
+            double tick;
+            checkNaifErrors();
+            sce2c_c(frameCode, et, &tick);
+            checkNaifErrors();
+            ticks.push_back(tick);
+        }
+        SPDLOG_DEBUG("etsToSclkTicks({}, {}) -> {} ticks", frameCode, mission, ticks.size());
+
+        return make_pair(ticks, ephemKernels);
     }
 
 

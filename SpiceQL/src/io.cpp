@@ -89,28 +89,36 @@ namespace SpiceQL {
                string sclk,
                string lsk,
                vector<vector<double>> angularVelocities,
-               string comment) {
+               string comment,
+               bool timesAreTicks) {
 
     SpiceInt handle;
-    
-    // convert times, but first, we need SCLK+LSK kernels
 
-    // allow and furnish multiple sclks
-    std::vector<std::unique_ptr<Kernel>> sclkKernels;
-    if (!sclk.empty()) {
-      for (const std::string& sclkPath : split(sclk, ','))
-        sclkKernels.push_back(std::make_unique<Kernel>(sclkPath));
-    }
-    Kernel lskKernel(lsk);
-    
-    for(auto &et : times) {
-      double sclkdp;
+    // ckw03_c expects encoded SCLK ticks. When timesAreTicks is false we must
+    // convert the incoming ETs, which requires furnishing the SCLK+LSK kernels.
+    // When timesAreTicks is true the caller already encoded the times (e.g. via
+    // the web service), so we skip furnishing entirely -- this is what lets CK
+    // generation work without a local SPICE data directory.
+    if (!timesAreTicks) {
+      // convert times, but first, we need SCLK+LSK kernels
+
+      // allow and furnish multiple sclks
+      std::vector<std::unique_ptr<Kernel>> sclkKernels;
+      if (!sclk.empty()) {
+        for (const std::string& sclkPath : split(sclk, ','))
+          sclkKernels.push_back(std::make_unique<Kernel>(sclkPath));
+      }
+      Kernel lskKernel(lsk);
+
+      for(auto &et : times) {
+        double sclkdp;
+        checkNaifErrors();
+        sce2c_c(bodyCode/1000, et, &sclkdp);
+        checkNaifErrors();
+        et = sclkdp;
+      }
       checkNaifErrors();
-      sce2c_c(bodyCode/1000, et, &sclkdp);
-      checkNaifErrors();
-      et = sclkdp;
     }
-    checkNaifErrors();
 
     if(comment.empty()) {
       comment = "CK Kernel";
