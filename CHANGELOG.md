@@ -34,6 +34,9 @@ release.
 -->
 ### Unreleased
 
+### Added
+- Added `etsToSclkTicks()` API function and updated `writeCk()` to support web-enabled CK generation [#146](https://github.com/DOI-USGS/SpiceQL/pull/146)
+
 ## 1.6.0 - 2026-07-13
 
 ### Added
