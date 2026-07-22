@@ -27,6 +27,23 @@ TEST_F(TempTestingFiles, UnitTestWriteCkTest) {
 }
 
 
+TEST_F(TempTestingFiles, UnitTestWriteCkTicksTest) {
+  fs::path path;
+  path = static_cast<fs::path>(getenv("SPICEROOT")) / "test_ck_ticks.bsp";
+
+  std::vector<std::vector<double>> orientations = {{0.2886751, 0.2886751, 0.5773503, 0.7071068 }, {0.4082483, 0.4082483, 0.8164966, 0 }};
+  std::vector<std::vector<double>> av = {{1,1,1}, {1,2,3}};
+  
+  // Already encoded ETS times as SCLK ticks so no sclk/lsk is needed
+  std::vector<double> ticks = {5139381342423.142, 5794741408078.021};
+  int bodyCode = -85000;
+  std::string referenceFrame = "j2000";
+  std::string segmentId = "CKCKCK";
+
+  writeCk(path, orientations, ticks, bodyCode, referenceFrame, segmentId, "", "", av, "", true);
+}
+
+
 
 TEST(IOTests, CreateSPKSegmentTest) {
   std::string comment = "This is a comment for \n a test SPK segment";

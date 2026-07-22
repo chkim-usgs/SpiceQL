@@ -472,6 +472,48 @@ class TestDoubleEtToSclk:
 
 
 # ---------------------------------------------------------------------------
+# etsToSclkTicks
+# ---------------------------------------------------------------------------
+
+class TestEtsToSclkTicks:
+    """
+    curl -XGET "https://astrogeology.usgs.gov/apis/spiceql/latest/etsToSclkTicks
+        ?frameCode=-85&ets=[31593348.006268278]&mission=lro&searchKernels=true"
+    """
+
+    ENDPOINT = f"{BASE_URL}/etsToSclkTicks"
+    PARAMS = {
+        "frameCode": -85,
+        "ets": "[31593348.006268278]",
+        "mission": "lro",
+        "searchKernels": "true",
+    }
+
+    def test_status_ok(self):
+        r = httpx.get(self.ENDPOINT, params=self.PARAMS)
+        assert_success(r)
+
+    def test_returns_one_tick(self):
+        r = httpx.get(self.ENDPOINT, params=self.PARAMS)
+        body = assert_success(r)
+        result = body["return"]
+        assert isinstance(result, list)
+        assert len(result) == 1, "Expected one tick per input ET"
+
+    def test_tick_value(self):
+        r = httpx.get(self.ENDPOINT, params=self.PARAMS)
+        body = assert_success(r)
+        assert approx_equal(body["return"][0], 922997380.174174), (
+            f"Expected ~922997380.174174, got {body['return'][0]}"
+        )
+
+    def test_kernels_include_sclk(self):
+        r = httpx.get(self.ENDPOINT, params=self.PARAMS)
+        body = assert_success(r)
+        assert "sclk" in body["kernels"]
+
+
+# ---------------------------------------------------------------------------
 # utcToEt
 # ---------------------------------------------------------------------------
 

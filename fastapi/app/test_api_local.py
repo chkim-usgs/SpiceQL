@@ -243,6 +243,28 @@ def test_doubleEtToSclk_returns_expected_sclk_string():
 
 
 # ---------------------------------------------------------------------------
+# etsToSclkTicks
+# ---------------------------------------------------------------------------
+
+def test_etsToSclkTicks_returns_expected_ticks():
+    expected_return = [922997380.174174, 922997394.174174]
+    lro_kernels = {
+        "fk": ["/lro/kernels/fk/lro_frames_2014049_v01.tf"],
+        "lsk": ["/base/kernels/lsk/naif0012.tls"],
+        "sclk": ["/lro/kernels/sclk/lro_clkcor_2024262_v00.tsc"],
+    }
+    with patch("pyspiceql.etsToSclkTicks", return_value=(expected_return, lro_kernels)):
+        response = client.get("/etsToSclkTicks", params={
+            "frameCode": -85,
+            "ets": "[31593348.006268278,31593362.006268278]",
+            "mission": "lro",
+            "searchKernels": "true",
+        })
+    assert response.status_code == 200
+    assert response.json()["body"]["return"] == expected_return
+
+
+# ---------------------------------------------------------------------------
 # utcToEt
 # ---------------------------------------------------------------------------
 
