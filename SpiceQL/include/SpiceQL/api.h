@@ -527,7 +527,7 @@ namespace SpiceQL {
     **/
     std::pair<nlohmann::json, nlohmann::json> findMissionKeywords(
         std::string key, 
-        std::string mission="", 
+        std::string mission, 
         bool useWeb=false, 
         bool searchKernels=true, 
         bool fullKernelPath=false, 
@@ -555,7 +555,7 @@ namespace SpiceQL {
     **/
     std::pair<nlohmann::json, nlohmann::json> findTargetKeywords(
         std::string key, 
-        std::string mission="", 
+        std::string mission, 
         bool useWeb=false, 
         bool searchKernels=true, 
         bool fullKernelPath=false, 

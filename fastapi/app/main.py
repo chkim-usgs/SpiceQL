@@ -483,7 +483,7 @@ async def getTargetFrameInfo(
 @app.get("/findMissionKeywords")
 async def findMissionKeywords(
     key: Annotated[KeyParam, Depends()],
-    mission: Annotated[MissionParam, Depends()],
+    mission: Annotated[MissionRequiredParam, Depends()],
     commonParams: Annotated[CommonParams, Depends()]):
     try:
         result, kernels = pyspiceql.findMissionKeywords(
@@ -504,7 +504,7 @@ async def findMissionKeywords(
 @app.get("/findTargetKeywords")
 async def findTargetKeywords(
     key: Annotated[KeyParam, Depends()],
-    mission: Annotated[MissionParam, Depends()],
+    mission: Annotated[MissionRequiredParam, Depends()],
     commonParams: Annotated[CommonParams, Depends()]):
     try:
         result, kernels = pyspiceql.findTargetKeywords(
