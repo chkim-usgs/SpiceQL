@@ -472,16 +472,16 @@ class TestDoubleEtToSclk:
 
 
 # ---------------------------------------------------------------------------
-# etsToSclkTicks
+# doubleEtsToSclkTicks
 # ---------------------------------------------------------------------------
 
-class TestEtsToSclkTicks:
+class TestDoubleEtsToSclkTicks:
     """
-    curl -XGET "https://astrogeology.usgs.gov/apis/spiceql/latest/etsToSclkTicks
+    curl -XGET "https://astrogeology.usgs.gov/apis/spiceql/latest/doubleEtsToSclkTicks
         ?frameCode=-85&ets=[31593348.006268278]&mission=lro&searchKernels=true"
     """
 
-    ENDPOINT = f"{BASE_URL}/etsToSclkTicks"
+    ENDPOINT = f"{BASE_URL}/doubleEtsToSclkTicks"
     PARAMS = {
         "frameCode": -85,
         "ets": "[31593348.006268278]",

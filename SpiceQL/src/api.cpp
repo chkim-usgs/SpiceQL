@@ -764,8 +764,8 @@ namespace SpiceQL {
     }
 
 
-    pair<vector<double>, json> etsToSclkTicks(int frameCode, vector<double> ets, string mission, bool useWeb, bool searchKernels, bool fullKernelPath, int limitCk, int limitSpk, vector<string> kernelList) {
-        SPDLOG_TRACE("calling etsToSclkTicks({}, {} ets, {}, {}, {}, {})", frameCode, ets.size(), mission, useWeb, searchKernels, kernelList.size());
+    pair<vector<double>, json> doubleEtsToSclkTicks(int frameCode, vector<double> ets, string mission, bool useWeb, bool searchKernels, bool fullKernelPath, int limitCk, int limitSpk, vector<string> kernelList) {
+        SPDLOG_TRACE("calling doubleEtsToSclkTicks({}, {} ets, {}, {}, {}, {})", frameCode, ets.size(), mission, useWeb, searchKernels, kernelList.size());
 
         json ephemKernels;
 
@@ -780,7 +780,7 @@ namespace SpiceQL {
                 {"limitSpk", limitSpk},
                 {"kernelList", kernelList}
             });
-            json out = spiceAPIQuery("etsToSclkTicks", args);
+            json out = spiceAPIQuery("doubleEtsToSclkTicks", args);
             vector<double> result = out["body"]["return"].get<vector<double>>();
             return make_pair(result, out["body"]["kernels"]);
         }
@@ -808,7 +808,7 @@ namespace SpiceQL {
             checkNaifErrors();
             ticks.push_back(tick);
         }
-        SPDLOG_DEBUG("etsToSclkTicks({}, {}) -> {} ticks", frameCode, mission, ticks.size());
+        SPDLOG_DEBUG("doubleEtsToSclkTicks({}, {}) -> {} ticks", frameCode, mission, ticks.size());
 
         return make_pair(ticks, ephemKernels);
     }

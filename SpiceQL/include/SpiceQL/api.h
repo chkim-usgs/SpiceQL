@@ -397,7 +397,7 @@ namespace SpiceQL {
      * @param kernelList vector<string> vector of additional kernels to load
      * @return vector<double> of encoded SCLK ticks matching the input ets
      */
-    std::pair<std::vector<double>, nlohmann::json> etsToSclkTicks(
+    std::pair<std::vector<double>, nlohmann::json> doubleEtsToSclkTicks(
         int frameCode,
         std::vector<double> ets,
         std::string mission="",

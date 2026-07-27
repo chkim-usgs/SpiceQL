@@ -331,14 +331,14 @@ async def doubleEtToSclk(
         return ResponseModel(statusCode=500, body=body)
 
 
-@app.get("/etsToSclkTicks")
-async def etsToSclkTicks(
+@app.get("/doubleEtsToSclkTicks")
+async def doubleEtsToSclkTicks(
     frameCode: Annotated[FrameCodeParam, Depends()],
     ets: Annotated[EtsParam, Depends()],
     mission: Annotated[MissionParam, Depends()],
     commonParams: Annotated[CommonParams, Depends()]):
     try:
-        result, kernels = pyspiceql.etsToSclkTicks(
+        result, kernels = pyspiceql.doubleEtsToSclkTicks(
             frameCode.value,
             ets.value,
             mission.value,

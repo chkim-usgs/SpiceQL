@@ -130,12 +130,12 @@ TEST_F(LroKernelSet, UnitTestDoubleSclkToEt) {
 }
 
 
-TEST_F(LroKernelSet, UnitTestEtsToSclkTicks) {
+TEST_F(LroKernelSet, UnitTestDoubleEtsToSclkTicks) {
   nlohmann::json testKernelJson;
   testKernelJson["kernels"] = {{ckPath1}, {ckPath2}, {spkPath1}, {spkPath2}, {spkPath3}, {ikPath2}, {fkPath}, {sclkPath}, {lskPath}};
   KernelSet testSet(testKernelJson);
 
-  auto [ticks, kernels] = etsToSclkTicks(-85, {31593348.006268278}, "lro");
+  auto [ticks, kernels] = doubleEtsToSclkTicks(-85, {31593348.006268278}, "lro");
 
   ASSERT_EQ(ticks.size(), 1);
   EXPECT_NEAR(ticks[0], 922997380.174174, 1e-3);

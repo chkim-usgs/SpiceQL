@@ -158,19 +158,12 @@ namespace SpiceQL {
       *
       * @param fileName path to file to write the segment to
       * @param quats nx4 vector of orientations as quaternions
-      * @param times nx1 vector of times matching the number of quats
+      * @param times nx1 vector of encoded SCLK ticks
       * @param bodyCode NAIF body code identifying the orientations belong to
       * @param referenceFrame NAIF string for the reference frame the orientations are in
       * @param segmentId Some ID to give the segment
-      * @param sclk path to S clock kernal to convert to and from ephemeris time
-      * @param lsk path to leap second kernel
       * @param angularVelocity optional, nx3 array of angular velocities
       * @param comment optional, comment to be associated with the segment
-      * @param timesAreTicks optional, if true the times are already encoded SCLK
-      *        ticks (as produced by sce2c_c / etsToSclkTicks) and no ET->SCLK
-      *        conversion is performed. In this mode the sclk and lsk kernels are
-      *        not furnished, allowing CK generation without a local SPICE data
-      *        directory (e.g. when the encoding was done via the web service).
       */
     void writeCk(std::string fileName,
                  std::vector<std::vector<double>> quats,
@@ -178,26 +171,20 @@ namespace SpiceQL {
                  int bodyCode,
                  std::string referenceFrame,
                  std::string segmentId,
-                 std::string sclk,
-                 std::string lsk,
                  std::vector<std::vector<double>> angularVelocity = {},
-                 std::string comment = "",
-                 bool timesAreTicks = false);
+                 std::string comment = "");
 
 
     /**
      * @brief Write CK segments to a file
      *
      * Given orientations, angular velocities, times, target and reference frames, write data as a segment in a CK kernel.
+     * The segments' times must already be encoded SCLK ticks.
      *
      * @param fileName path to file to write the segment to
-     * @param sclk path to SCLK kernel matching the segments' frame code
-     * @param lsk path to LSK kernel
      * @param segments spkSegments to be writte
      */
   void writeCk(std::string fileName,
-               std::string sclk,
-               std::string lsk,
                std::vector<CkSegment> segments);
 
   void writeComment(std::string fileName,
