@@ -34,6 +34,12 @@ release.
 -->
 ### Unreleased
 
+### Added
+- Added `doubleEtsToSclkTicks()` API function to convert ephemeris times to encoded SCLK ticks [#146](https://github.com/DOI-USGS/SpiceQL/pull/146)
+
+### Changed
+- Changed `writeCk()` to now expect `times` as encoded SCLK ticks instead of ephemeris times and removed the `sclk` and `lsk` parameters. It no longer performs ET→SCLK conversion internally, so CK generation no longer requires local SCLK/LSK kernels as callers must now encode ticks themselves (see `doubleEtsToSclkTicks()`)[#146](https://github.com/DOI-USGS/SpiceQL/pull/146)
+
 ## 1.6.0 - 2026-07-13
 
 ### Added

@@ -13,17 +13,16 @@ TEST_F(TempTestingFiles, UnitTestWriteCkTest) {
   fs::path path;
   path = static_cast<fs::path>(getenv("SPICEROOT")) / "test_ck.bsp";
 
-  fs::path lskPath = fs::absolute("data/naif0012.tls"); 
-  fs::path sclkPath = fs::absolute("data/lro_clkcor_2020184_v00.tsc");
-
   std::vector<std::vector<double>> orientations = {{0.2886751, 0.2886751, 0.5773503, 0.7071068 }, {0.4082483, 0.4082483, 0.8164966, 0 }};
   std::vector<std::vector<double>> av = {{1,1,1}, {1,2,3}};
-  std::vector<double> times = {110000000, 120000001};
-  int bodyCode = -85000; 
+  // writeCk expects encoded SCLK ticks; these are sce2c_c(-85, et) for the ETs
+  // {110000000, 120000001}, so no sclk/lsk kernels are needed.
+  std::vector<double> ticks = {5139381342423.142, 5794741408078.021};
+  int bodyCode = -85000;
   std::string referenceFrame = "j2000";
   std::string segmentId = "CKCKCK";
 
-  writeCk(path, orientations, times, bodyCode, referenceFrame, segmentId, sclkPath, lskPath, av);
+  writeCk(path, orientations, ticks, bodyCode, referenceFrame, segmentId, av);
 }
 
 

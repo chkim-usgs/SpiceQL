@@ -330,6 +330,30 @@ async def doubleEtToSclk(
         body = ErrorModel(error=str(e))
         return ResponseModel(statusCode=500, body=body)
 
+
+@app.get("/doubleEtsToSclkTicks")
+async def doubleEtsToSclkTicks(
+    frameCode: Annotated[FrameCodeParam, Depends()],
+    ets: Annotated[EtsParam, Depends()],
+    mission: Annotated[MissionParam, Depends()],
+    commonParams: Annotated[CommonParams, Depends()]):
+    try:
+        result, kernels = pyspiceql.doubleEtsToSclkTicks(
+            frameCode.value,
+            ets.value,
+            mission.value,
+            False,
+            commonParams.searchKernels,
+            commonParams.fullKernelPath,
+            commonParams.limitCk,
+            commonParams.limitSpk,
+            commonParams.kernelList)
+        body = ResultModel(result=result, kernels=kernels)
+        return ResponseModel(statusCode=200, body=body)
+    except Exception as e:
+        body = ErrorModel(error=str(e))
+        return ResponseModel(statusCode=500, body=body)
+
 @app.get("/utcToEt")
 async def utcToEt(
     utc: Annotated[UtcParam, Depends()],
@@ -459,7 +483,7 @@ async def getTargetFrameInfo(
 @app.get("/findMissionKeywords")
 async def findMissionKeywords(
     key: Annotated[KeyParam, Depends()],
-    mission: Annotated[MissionParam, Depends()],
+    mission: Annotated[MissionRequiredParam, Depends()],
     commonParams: Annotated[CommonParams, Depends()]):
     try:
         result, kernels = pyspiceql.findMissionKeywords(
@@ -480,7 +504,7 @@ async def findMissionKeywords(
 @app.get("/findTargetKeywords")
 async def findTargetKeywords(
     key: Annotated[KeyParam, Depends()],
-    mission: Annotated[MissionParam, Depends()],
+    mission: Annotated[MissionRequiredParam, Depends()],
     commonParams: Annotated[CommonParams, Depends()]):
     try:
         result, kernels = pyspiceql.findTargetKeywords(

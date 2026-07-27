@@ -54,12 +54,13 @@ TEST_F(TempTestingFiles, GetKernelTimes) {
 
   std::vector<std::vector<double>> orientations = {{0.2886751, 0.2886751, 0.5773503, 0.7071068 }, {0.4082483, 0.4082483, 0.8164966, 0 }};
   std::vector<std::vector<double>> av = {{1,1,1}, {1,2,3}};
-  std::vector<double> times = {110000000, 120000001};
-  int bodyCode = -85000; 
+  // Encoded SCLK ticks: sce2c_c(-85, et) for ETs {110000000, 120000001}.
+  std::vector<double> times = {5139381342423.142, 5794741408078.021};
+  int bodyCode = -85000;
   std::string referenceFrame = "j2000";
   std::string segmentId = "CKCKCK";
 
-  writeCk(path, orientations, times, bodyCode, referenceFrame, segmentId, sclkPath, lskPath, av);
+  writeCk(path, orientations, times, bodyCode, referenceFrame, segmentId, av);
 
   Kernel lsk(lskPath);
   Kernel sclk(sclkPath);

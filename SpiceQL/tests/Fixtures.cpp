@@ -332,16 +332,20 @@ void LroKernelSet::SetUp() {
   ckPath1 = root / "ck" / "soc31_1111111_1111111_v21.bc";
   std::vector<std::vector<double>> avs = {{1,1,1}, {2,2,2}};
   std::vector<std::vector<double>> quats = {{0.2886751, 0.2886751, 0.5773503, 0.7071068 }, {0.4082483, 0.4082483, 0.8164966, 0 }};
+  // ETs used for the SPK segments below
   std::vector<double> times1 = {110000000, 120000000};
   std::vector<double> times2 = {130000000, 140000000};
+  // writeCk expects encoded SCLK ticks, sce2c_c(-85, et) of times1/times2
+  std::vector<double> ckTicks1 = {5139381342423.142, 5794741342542.021};
+  std::vector<double> ckTicks2 = {6450101342365.975, 7105461342391.438};
 
-  writeCk(ckPath1, quats, times1, bodyCode, referenceFrame, "CK ID 1",  sclkPath, lskPath, avs, "CK1");
+  writeCk(ckPath1, quats, ckTicks1, bodyCode, referenceFrame, "CK ID 1", avs, "CK1");
 
   // Write CK2 ------------------------------------------
   ckPath2 = root / "ck" / "lrolc_1111111_1111111_v11.bc";
   avs = {{3,4,5}, {6,5,5}};
   quats = {{0.3754439, 0.3754439, 0.3754439, -0.7596879}, {-0.5632779, -0.5632779, -0.5632779, 0.21944}};
-  writeCk(ckPath2, quats, times2, bodyCode, referenceFrame, "CK ID 2", sclkPath, lskPath, avs, "CK2");
+  writeCk(ckPath2, quats, ckTicks2, bodyCode, referenceFrame, "CK ID 2", avs, "CK2");
 
   // Write SPK1 ------------------------------------------
   fs::create_directory(root / "spk");

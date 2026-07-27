@@ -88,6 +88,8 @@ def to_list(value: Any) -> list:
     if value is not None:
         value = str(value)
         value = value.replace("[", "").replace("]", "").replace("\"", "").replace("\'", "").replace("\\", "").replace(" ", "").split(",")
+        # drop empty tokens so an empty input (e.g. [] -> "" -> ['']) yields [] instead of ['']
+        value = [v for v in value if v != ""]
     return value
 
 def verify_ets(data: dict) -> float:
@@ -571,6 +573,27 @@ class MissionParam():
                     }
                 }
             )] = ""):
+        self.value = mission
+
+
+class MissionRequiredParam():
+    @validate_params
+    def __init__(
+            self,
+            mission: Annotated[str, Query(
+                min_length=1,
+                description="Mission name. Required for this endpoint.",
+                openapi_examples={
+                    "ctx": {
+                        "summary": "MRO CTX",
+                        "value": "ctx"
+                    },
+                    "lro": {
+                        "summary": "LROC",
+                        "value": "lroc"
+                    }
+                }
+            )]):
         self.value = mission
 
 class NumRecordsParam():
