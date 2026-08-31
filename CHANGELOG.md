@@ -34,6 +34,12 @@ release.
 -->
 ### Unreleased
 
+### Changed
+- Updated API docs title section to include version and more information
+
+### Fixed
+- Fixed manual docs issues
+
 ## 1.7.0 - 2026-07-28
 
 ### Added
