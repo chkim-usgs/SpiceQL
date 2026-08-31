@@ -26,7 +26,7 @@ app = FastAPI(
     description=(
         "**Source Code**: [github.com/DOI-USGS/SpiceQL](https://github.com/DOI-USGS/SpiceQL)\n\n"
         "### Links to SpiceQL docs:\n\n"
-        "- [Manual](https://asc-public-docs.s3.us-west-2.amazonaws.com/software_manuals/spiceql/index.html) — "
+        "- [Manual](https://astrogeology.usgs.gov/docs/manuals/spiceql/) — "
         "Installation setup and the C++ API reference\n\n"
         "- [Guide](https://astrogeology.usgs.gov/docs/getting-started/using-spiceql/exploring-spiceqls-rest-python-and-cpp-apis/) — "
         "Exploring SpiceQL's REST, Python, and C++ APIs with examples\n\n"
