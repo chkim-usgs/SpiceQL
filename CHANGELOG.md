@@ -34,6 +34,9 @@ release.
 -->
 ### Unreleased
 
+### Added
+- Added the ability to set the SpiceQL config directory via the`setConfigDirectory()` function or the `SPICEQL_CONFIG_DIR` environment variable. [#152](https://github.com/DOI-USGS/SpiceQL/issues/152)
+
 ### Fixed
 - Fixed Python3 build failure in the SWIG bindings by replacing the Python2 C-API calls `PyInt_FromLong` and `PyString_FromString` with their Python3 equivalents `PyLong_FromLong` and `PyUnicode_FromString`. SWIG 4.5.0 dropped Python2 support and removed compatibility macros, breaking the build. [#151](https://github.com/DOI-USGS/SpiceQL/pull/151)
 
