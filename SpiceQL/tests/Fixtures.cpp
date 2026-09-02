@@ -498,8 +498,9 @@ void AliasMapTest::SetUp() {
 void ConfigDirectoryTest::SetUp() {
   root = fs::temp_directory_path() / ("SQTESTS_cfgdir_" + gen_random(10));
   dbDir = root / "etc" / "SpiceQL" / "db";
-  aliasMapFile = fs::path(_SOURCE_PREFIX) / "SpiceQL" / "aliasMap.json";
+  aliasMapFile = root / "etc" / "SpiceQL" / "aliasMap.json";
   fs::create_directories(dbDir);
+  std::ofstream(aliasMapFile.string()) << "{}";
 
   // empty prefix that has no db or alias map
   emptyPrefix = fs::temp_directory_path() / ("SQTESTS_empty_" + gen_random(10));
