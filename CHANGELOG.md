@@ -34,6 +34,9 @@ release.
 -->
 ### Unreleased
 
+### Added
+- Added the ability to set the SpiceQL config directory via the`setConfigDirectory()` function or the `SPICEQL_CONFIG_DIR` environment variable. [#152](https://github.com/DOI-USGS/SpiceQL/issues/152)
+
 ### Changed
 - Updated API docs title section to include version and more information [#50](https://github.com/DOI-USGS/SpiceQL/pull/150)
 
