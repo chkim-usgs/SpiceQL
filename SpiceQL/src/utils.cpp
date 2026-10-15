@@ -8,6 +8,7 @@
 #include <fstream>
 #include <regex>
 #include <chrono>
+#include <unordered_set>
 #include <cmath>
 #include <cstring>
 #include <float.h>
@@ -147,25 +148,33 @@ namespace SpiceQL {
 
   vector<vector<string>> getPathsFromRegex(string root, vector<string> regexes) {
     vector<string> files_to_search = Memo::ls(root, true);
-      
-    vector<vector<string>> kernels; 
-    string temp;
+
+    vector<vector<string>> kernels;
     vector<string> paths;
     paths.reserve(files_to_search.size());
-    
-    for (auto &regex : regexes) { 
+
+    vector<string> basenames;
+    basenames.reserve(files_to_search.size());
+    for (auto &f : files_to_search) {
+      basenames.push_back(fs::path(f).filename().string());
+    }
+
+    for (auto &regex : regexes) {
       paths.clear();
-      SPDLOG_INFO("Searching for kernels matching {} in {} files", regex, files_to_search.size());
-      
-      for (auto &f : files_to_search) {
-        temp = fs::path(f).filename().string();
-        if (regex_search(temp.c_str(), basic_regex(regex, regex_constants::optimize|regex_constants::ECMAScript)) && temp.at(0) != '.' ) {
-          paths.push_back(f);
+      SPDLOG_DEBUG("Searching for kernels matching {} in {} files", regex, files_to_search.size());
+
+      const basic_regex matcher(regex, regex_constants::optimize | regex_constants::ECMAScript);
+
+      for (size_t i = 0; i < files_to_search.size(); i++) {
+        const string &name = basenames[i];
+        if (name.empty() || name.front() == '.') continue;
+        if (regex_search(name, matcher)) {
+          paths.push_back(files_to_search[i]);
         }
       }
 
       SPDLOG_DEBUG("found: {}", fmt::join(paths, ", "));
-      if (!paths.empty()) { 
+      if (!paths.empty()) {
         kernels.push_back(paths);
       }
     }
@@ -823,103 +832,115 @@ namespace SpiceQL {
   pair<double, double> getKernelStartStopTimes(string kpath) {
     SPDLOG_TRACE("getKernelStartStopTimes({})", kpath);
 
-    double start_time = 0;
-    double stop_time = 0;
-    
-    auto getStartStopFromInterval = [&](SpiceCell &coverage) {
+    string resolved = kpath;
+    if (!fs::exists(resolved)) {
+      resolved = (getDataDirectory() / fs::path(kpath)).string();
+    }
 
-      //Get the number of intervals in the object.
-      checkNaifErrors();
-      int niv = card_c(&coverage) / 2;
-      //Convert the coverage interval start and stop times to TDB
-      SpiceDouble begin, end;
-
-      for(int j = 0;  j < niv;  j++) {
-        //Get the endpoints of the jth interval.
-        SPDLOG_TRACE("Collecting start stop times");
-        wnfetd_c(&coverage, j, &begin, &end);
-        checkNaifErrors();
-
-        if (start_time == 0 && stop_time == 0) { 
-          start_time = begin; 
-          stop_time = end;
-        }        
-
-        start_time = min(start_time, begin);
-        stop_time = max(stop_time, end);
-      }
-      checkNaifErrors();
-    };
-
-    SpiceChar fileType[32], source[2048];
-    SpiceInt handle;
-    SpiceBoolean found;
-
-    Kernel k(kpath);
-
+    SpiceChar arch[33], ktype[33];
     checkNaifErrors();
-    kinfo_c(kpath.c_str(), 32, 2048, fileType, source, &handle, &found);
+    getfat_c(resolved.c_str(), 33, 33, arch, ktype);
     checkNaifErrors();
 
-    string currFile = fileType;
-
-    //create a spice cell capable of containing all the objects in the kernel.
-    SPICEINT_CELL(currCell, 300000);
-
-    //this resizing is done because otherwise a spice cell will append new data
-    //to the last "currCell"
-    ssize_c(0, &currCell);
-    ssize_c(300000, &currCell);
-
-    SPICEDOUBLE_CELL(cover, 300000);
-
-    if (currFile == "SPK") {
-      spkobj_c(kpath.c_str(), &currCell);
-    }
-    else if (currFile == "CK") {
-      ckobj_c(kpath.c_str(), &currCell);
-    }
-    else if (currFile == "TEXT") {
+    const string type = ktype;
+    if (type == "TEXT" || type == "KPL") {
       throw invalid_argument("Input Kernel is a text kernel which has no intervals");
     }
+    if (type != "CK" && type != "SPK") {
+      throw invalid_argument("Kernel [" + kpath + "] is a " + type +
+                             ", which has no time intervals to collect");
+    }
+
+    auto t_fat = std::chrono::steady_clock::now();
+
+    SpiceInt handle = 0;
     checkNaifErrors();
+    dafopr_c(resolved.c_str(), &handle);
+    checkNaifErrors();
+    auto t_open = std::chrono::steady_clock::now();
+    size_t n_segments = 0;
 
-    vector<pair<double, double>> result;
+    double start_time = 0;
+    double stop_time = 0;
+    bool first = true;
 
-    for(int bodyCount = 0 ; bodyCount < card_c(&currCell) ; bodyCount++) {
-      //get the NAIF body code
-      int body = SPICE_CELL_ELEM_I(&currCell, bodyCount);
-
-      //only provide coverage for negative NAIF codes
-      //(Positive codes indicate planetary bodies, negatives indicate
-      // spacecraft and instruments)
+    try {
+      SpiceInt nd = 0, ni = 0, fward = 0, bward = 0, freeAddr = 0;
+      SpiceChar ifname[61];
+      dafrfr_c(handle, 61, &nd, &ni, ifname, &fward, &bward, &freeAddr);
       checkNaifErrors();
-      if (body < 0) {
-        //find the correct coverage window
-        if(currFile == "SPK") {
-          SPICEDOUBLE_CELL(cover, 300000);
-          ssize_c(0, &cover);
-          ssize_c(300000, &cover);
-          SPDLOG_TRACE("Getting spk coverage");
-          spkcov_c(kpath.c_str(), body, &cover);
-          getStartStopFromInterval(cover);
-        }
-        else if(currFile == "CK") {
-          //  200,000 is the max coverage window size for a CK kernel
-          SPICEDOUBLE_CELL(cover, 300000);
-          ssize_c(0, &cover);
-          ssize_c(300000, &cover);
-          SPDLOG_TRACE("Getting ck coverage");
 
-          // A SPICE SEGMENT is composed of SPICE INTERVALS
-          ckcov_c(kpath.c_str(), body, SPICEFALSE, "SEGMENT", 0.0, "TDB", &cover);
-          SPDLOG_TRACE("collecting start stop times");
+      SpiceDouble summary[128];
+      SpiceDouble dc[128];
+      SpiceInt ic[128];
 
-          getStartStopFromInterval(cover);
+      dafbfs_c(handle);
+      checkNaifErrors();
+
+      SpiceBoolean found = SPICEFALSE;
+      daffna_c(&found);
+      checkNaifErrors();
+
+      while (found) {
+        dafgs_c(summary);
+        dafus_c(summary, nd, ni, dc, ic);
+        checkNaifErrors();
+
+        // Only negative NAIF codes (spacecraft and instruments) get coverage
+        if (ic[0] >= 0) {
+          daffna_c(&found);
+          checkNaifErrors();
+          continue;
         }
+
+        double segStart = dc[0];
+        double segStop  = dc[1];
+
+        if (type == "CK") {
+          // A CK descriptor's times are encoded SCLK ticks, not ET. The clock
+          // they belong to is the spacecraft's, and a CK instrument id is the
+          // spacecraft id times 1000 (LRO: sc -85, bus frame -85000), so integer
+          // division recovers it. This is the one place the old ckcov_c call was
+          // doing work for us, and it needs the mission SCLK furnished — which
+          // create_database already arranges per mission.
+          SpiceInt sc = ic[0] / 1000;
+          sct2e_c(sc, dc[0], &segStart);
+          sct2e_c(sc, dc[1], &segStop);
+          checkNaifErrors();
+        }
+
+        if (first) {
+          start_time = segStart;
+          stop_time = segStop;
+          first = false;
+        }
+        else {
+          start_time = min(start_time, segStart);
+          stop_time = max(stop_time, segStop);
+        }
+
+        n_segments++;
+        daffna_c(&found);
         checkNaifErrors();
       }
     }
+    catch (...) {
+      dafcls_c(handle);
+      throw;
+    }
+
+    dafcls_c(handle);
+    checkNaifErrors();
+
+    {
+      using namespace std::chrono;
+      auto now = steady_clock::now();
+      SPDLOG_DEBUG("KSTIME {} type={} segments={} open_ms={:.1f} walk_ms={:.1f}",
+                   fs::path(resolved).filename().string(), type, n_segments,
+                   duration<double, std::milli>(t_open - t_fat).count(),
+                   duration<double, std::milli>(now - t_open).count());
+    }
+
     return pair<double, double>(start_time, stop_time);
   }
 

@@ -1,7 +1,11 @@
+#include <chrono>
+#include <fstream>
 #include <iostream>
 #include <regex>
+#include <map>
 #include <mutex>
 #include <unordered_map>
+#include <unordered_set>
 
 // we need to include this to overwrite and other std::fs imports
 #include <ghc/fs_std.hpp>
@@ -117,6 +121,68 @@ namespace SpiceQL {
   
 
   // objs need to be passed in c-style because of a lack of copy contructor in BtreeMap
+  namespace {
+    using DbClock = std::chrono::steady_clock;
+
+    inline double secondsSince(DbClock::time_point t0) {
+      return std::chrono::duration<double>(DbClock::now() - t0).count();
+    }
+
+    const json &rawConfig() {
+      static const json raw = [] {
+        json out;
+        try {
+          for (const json &j : getAvailableConfigs()) {
+            out.update(j);
+          }
+        } catch (std::exception &e) {
+          // Reporting is best-effort, a bad config shouldn't fail the search
+          SPDLOG_WARN("Could not read configs for quality reporting: {}", e.what());
+        }
+        return out;
+      }();
+      return raw;
+    }
+
+
+    vector<string> qualityOwners(const string &spiceql_name, const string &type, const string &quality) {
+      const json &raw = rawConfig();
+      vector<string> owners;
+      unordered_set<string> seen;
+      vector<string> pending = {spiceql_name};
+
+      while (!pending.empty()) {
+        string current = pending.back();
+        pending.pop_back();
+
+        // Guards against a cycle in deps as well as the diamond that shows up
+        // when two entries inherit from the same parent.
+        if (!seen.insert(current).second || !raw.contains(current)) continue;
+
+        const json &entry = raw[current];
+        if (!entry.is_object()) continue;
+
+        if (entry.contains(type) && entry[type].is_object() && entry[type].contains(quality)) {
+          owners.push_back(current);
+        }
+
+        if (entry.contains("deps")) {
+          for (auto &dep : entry["deps"]) {
+            if (!dep.is_string()) continue;
+            string name = dep.get<string>();
+            // Written as a json pointer ("/moc"). Every dep in the shipped
+            // configs is a single top-level entry, so the leading slash is all
+            // there is to strip.
+            if (!name.empty() && name.front() == '/') name.erase(0, 1);
+            if (!name.empty()) pending.push_back(name);
+          }
+        }
+      }
+      return owners;
+    }
+  }
+
+
   void collectStartStopTimes(string mission, string type, string quality, TimeIndexedKernels *kernel_times) { 
     SPDLOG_TRACE("In globTimeIntervals.");
     Config conf;
@@ -188,9 +254,24 @@ namespace SpiceQL {
 
     unordered_set<int> seen_codes;
 
-    // Furnish every mission's frame-defining text kernels, then read the NAIF
-    // body code<->name associations and enumerate kernel-defined frames. This
-    // is the slow, one-time work that runtime resolution then avoids.
+    {
+      SPICEINT_CELL(builtin, 10000);
+      scard_c(0, &builtin);
+      bltfrm_c(SPICE_FRMTYP_ALL, &builtin);
+      checkNaifErrors();
+      SpiceInt nbuiltin = card_c(&builtin);
+      for (SpiceInt i = 0; i < nbuiltin; i++) {
+        SpiceInt fcode = SPICE_CELL_ELEM_I(&builtin, i);
+        SpiceChar fname[128];
+        frmnam_c(fcode, 128, fname);
+        if (strlen(fname) > 0) {
+          insertFramePair((int)fcode, string(fname), m_frame_codes, m_frame_names, seen_codes);
+        }
+      }
+      checkNaifErrors();
+      SPDLOG_DEBUG("collectFrameInfo: {} built-in frames", nbuiltin);
+    }
+
     for (auto &el : globalConf.items()) {
       string mission = el.key();
       json textKernels;
@@ -210,9 +291,6 @@ namespace SpiceQL {
       KernelSet ks(textKernels);
       checkNaifErrors();
 
-      // NAIF_BODY_CODE / NAIF_BODY_NAME define bodies, spacecraft, and
-      // instruments (e.g. -85 -> "LRO", -85600 -> "LRO_LROCNACL"). These do not
-      // come back from kplfrm_c, so read the pool directly.
       const SpiceInt ROOM = 5000;
       const SpiceInt LENOUT = 128;
       {
@@ -235,10 +313,8 @@ namespace SpiceQL {
         }
       }
 
-      // Kernel-defined and built-in frames (FK TKFRAMEs etc.).
       SPICEINT_CELL(idset, 10000);
       scard_c(0, &idset);
-      bltfrm_c(SPICE_FRMTYP_ALL, &idset);
       kplfrm_c(SPICE_FRMTYP_ALL, &idset);
       checkNaifErrors();
       SpiceInt nframes = card_c(&idset);
@@ -286,7 +362,13 @@ namespace SpiceQL {
         throw runtime_error("MESSAGE: " + msg + ", ERROR: " + string(e.what()) + ".");
       }
 
+      auto t_total = DbClock::now();
+
+      auto t_phase = DbClock::now();
       Config config; 
+      SPDLOG_INFO("create_database: loading config took {:.2f}s", secondsSince(t_phase));
+
+      t_phase = DbClock::now();
       json json_kernels = {};
       // Verify mlist has acceptable mission names
       vector<string> lowercase_mlist;
@@ -307,19 +389,30 @@ namespace SpiceQL {
         json_kernels = getLatestKernels(config.get()); 
       }
       
+      SPDLOG_INFO("create_database: resolving kernel lists took {:.2f}s", secondsSince(t_phase));
+
       // load time kernels for creating the timed kernel DataBase 
+      t_phase = DbClock::now();
       json lsk_json = getLatestKernels(config["base"].getRecursive("lsk")); 
 
       SPDLOG_TRACE("InventoryImpl LSKs: {}", lsk_json.dump(4));
 
       m_required_kernels.load(lsk_json); 
+      SPDLOG_INFO("create_database: furnishing LSKs took {:.2f}s", secondsSince(t_phase));
 
+      double sec_sclk = 0, sec_kernel_reads = 0, sec_text = 0;
+      size_t n_kernels_read = 0, n_missions = 0;
+
+      t_phase = DbClock::now();
       for (auto &[mission, kernels] : json_kernels.items()) {
         SPDLOG_TRACE("MISSION: {}", mission);
+        n_missions++;
 
+        auto t_step = DbClock::now();
         json sclk_json = getLatestKernels(config[mission].getRecursive("sclk")); 
         SPDLOG_TRACE("{} SCLKs: {}", mission, sclk_json.dump(4)); 
         KernelSet sclks_ks(sclk_json); 
+        sec_sclk += secondsSince(t_step);
 
         for(auto &[kernel_type, kernel_obj] : kernels.items()) { 
           if (kernel_type == "ck" || kernel_type == "spk") { 
@@ -335,12 +428,17 @@ namespace SpiceQL {
                 
                 TimeIndexedKernels *tkernels = new TimeIndexedKernels();
                 // btrees cannot be copied, so use pointers
+                auto t_read = DbClock::now();
                 collectStartStopTimes(mission, kernel_type, quality, tkernels); 
+                sec_kernel_reads += secondsSince(t_read);
+                // file_paths has one entry per kernel actually read
+                n_kernels_read += tkernels->file_paths.size();
                 m_timedep_kerns[map_key] = tkernels;
               }
             }
           } 
           else { // it's a txt kernel or some other non-time dependant kernel 
+            auto t_txt = DbClock::now();
             vector<json::json_pointer> ptrs = findKeyInJson(kernel_obj, "kernels", true); 
             
             for (auto &ptr : ptrs) { 
@@ -357,16 +455,31 @@ namespace SpiceQL {
                 } 
               m_nontimedep_kerns[btree_key] = kernel_vec; 
             } 
+            sec_text += secondsSince(t_txt);
           }
         } 
       }
 
+      SPDLOG_INFO("create_database: {} missions took {:.2f}s "
+                  "(sclk {:.2f}s, kernel time reads {:.2f}s over {} kernels, text {:.2f}s)",
+                  n_missions, secondsSince(t_phase), sec_sclk, sec_kernel_reads,
+                  n_kernels_read, sec_text);
+      if (n_kernels_read) {
+        SPDLOG_INFO("create_database: {:.1f} ms per kernel time read",
+                    sec_kernel_reads * 1000.0 / n_kernels_read);
+      }
+
       // Precompute frame caches (frame list + bidirectional code<->name map)
       // so runtime resolution never needs to furnish slow FKs.
+      t_phase = DbClock::now();
       collectFrameInfo();
+      SPDLOG_INFO("create_database: collectFrameInfo took {:.2f}s", secondsSince(t_phase));
 
       // write everything out
+      t_phase = DbClock::now();
       write_database();
+      SPDLOG_INFO("create_database: write_database took {:.2f}s", secondsSince(t_phase));
+      SPDLOG_INFO("create_database: TOTAL {:.2f}s", secondsSince(t_total));
     }
     else { // load the database
       // read_database();
@@ -433,7 +546,6 @@ namespace SpiceQL {
       if (type == Kernel::Type::CK || type == Kernel::Type::SPK) { 
         SPDLOG_DEBUG("Trying to search time dependent kernels");
         TimeIndexedKernels *time_indices = nullptr;
-        bool found = false;        
 
         int limitQuality = limit_spk;
         vector<Kernel::Quality> qualities = spkQualities;
@@ -444,20 +556,35 @@ namespace SpiceQL {
           limitQuality = limit_ck;
         } 
 
-        // sort in descending order
-        std::sort(qualities.begin(), qualities.end(), std::greater<>());
+        std::sort(qualities.begin(), qualities.end());
 
-        // iterate down the qualities
-        for(auto quality = qualities.begin(); quality != qualities.end() && !found; ++quality) {
+        // The union across qualities, in load order, plus the quality that gets
+        // reported for it. The union is a chain rather than a choice: a smithed
+        // CK carries a tie-point correction but no spacecraft bus attitude, so
+        // the lower tier is not redundant, it is load-bearing. Reporting the
+        // best tier present would therefore overstate the result — a smithed
+        // kernel overlapping one hour of a month-long window would label the
+        // whole month smithed. The lowest tier that contributed is reported
+        // instead, so the quality describes the weakest link the chain depends
+        // on.
+        vector<string> union_kernels;
+        Kernel::Quality lowest_quality = Kernel::Quality::NOQUALITY;
+        bool found_quality = false;
+
+        // Each config entry that contributed a tier, mapped to the best tier it
+        // contributed. Reported as <owner>_<type>_quality so a caller can see
+        // what each part of the chain is worth, not just the floor. Ordered for
+        // a stable result.
+        std::map<string, Kernel::Quality> owner_qualities;
+
+        // attempt all requested qualities  
+        for(auto quality = qualities.begin(); quality != qualities.end(); ++quality) {
           string key = spiceql_name+"/"+Kernel::translateType(type)+"/"+Kernel::translateQuality(*quality)+"/";
           SPDLOG_DEBUG("Key: {}", key);
 
           if (m_timedep_kerns.contains(key)) { 
             SPDLOG_DEBUG("Key {} found", key); 
-            
-            // we can get the key 
             time_indices = m_timedep_kerns[key]; 
-            found = true;
           }
           else {
             // try to load the binary files 
@@ -543,37 +670,56 @@ namespace SpiceQL {
             final_time_kernels.push_back(time_indices->file_paths.at(index));
           }
 
-          if (final_time_kernels.size()) { 
-            found = true;
+          if (final_time_kernels.size()) {
+            // Ascending, so the first tier to contribute is the lowest one.
+            // NOQUALITY is itself a tier, hence the flag rather than a sentinel.
+            if (!found_quality) {
+              lowest_quality = *quality;
+              found_quality = true;
+            }
+
+            // Ascending again, so plain assignment leaves each owner holding the
+            // best tier it contributed.
+            for (auto &owner : qualityOwners(spiceql_name, Kernel::translateType(type),
+                                             Kernel::translateQuality(*quality))) {
+              owner_qualities[owner] = *quality;
+            }
+
+            vector<string> tier;
             if (limitQuality > -1 && limitQuality < final_time_kernels.size()) { 
-              vector<string> limitedKernels;
               int start_idx = final_time_kernels.size() - 1;
               int stop_idx = start_idx - limitQuality;
               for (auto i = start_idx; i > stop_idx; --i) {
-                if (full_kernel_path) {
-                  limitedKernels.push_back((data_dir / final_time_kernels[i]).string());
-                } else {
-                  limitedKernels.push_back(final_time_kernels[i]);
-                }
+                tier.push_back(final_time_kernels[i]);
               }
-              kernels[Kernel::translateType(type)] = limitedKernels;
-              kernels[qkey] = Kernel::translateQuality(*quality);   
             }
             else { 
-              vector<string> allKernels;
-              if (full_kernel_path) {
-                for(string &e : final_time_kernels) { 
-                  allKernels.push_back((data_dir / e).string());
-                }
-              } else {
-                allKernels = final_time_kernels;
-              }
-              kernels[Kernel::translateType(type)] = allKernels;
-              kernels[qkey] = Kernel::translateQuality(*quality);
+              tier = final_time_kernels;
+            }
+
+            for (string &e : tier) { 
+              union_kernels.push_back(full_kernel_path ? (data_dir / e).string() : e);
             }
           }
           SPDLOG_TRACE("NUMBER OF ITERATIONS: {}", iterations);
           SPDLOG_TRACE("NUMBER OF KERNELS FOUND: {}", final_time_kernels.size());  
+        }
+
+        if (union_kernels.size()) {
+          kernels[Kernel::translateType(type)] = union_kernels;
+
+          // Owners first, then the searched name. spiceql_name is usually an
+          // owner of its own kernels too, and for that key the floor is what
+          // should be reported — so the write order matters.
+          for (auto &[owner, owner_quality] : owner_qualities) {
+            kernels[owner+"_"+Kernel::translateType(type)+"_quality"] =
+                Kernel::translateQuality(owner_quality);
+          }
+          kernels[qkey] = Kernel::translateQuality(lowest_quality);
+
+          SPDLOG_DEBUG("Unioned {} {} kernels across qualities, reporting lowest quality {}",
+                       union_kernels.size(), Kernel::translateType(type),
+                       Kernel::translateQuality(lowest_quality));
         }
       }
       else { // text/non time based kernels
