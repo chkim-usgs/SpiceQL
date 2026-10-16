@@ -38,6 +38,7 @@ dependencies:
   - pip:
     - mkdocs 
     - mkdocs-swagger-ui-tag
+    - mkdocs-llmstxt
     - mkdoxy
     - check-jsonschema
     - mkdocs-material

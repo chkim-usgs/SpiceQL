@@ -25,35 +25,146 @@ hide:
   <iframe src="assets/mars-banner.html"
           scrolling="no"
           loading="lazy"
-          title="Mars Orbit Visualization — SpiceQL">
+          title="Mars Orbit Visualization | SpiceQL">
   </iframe>
 </div>
 
 
-This Library provides a C++ interface querying, reading and writing Naif SPICE kernels. Built on the [Naif Toolkit](https://naif.jpl.nasa.gov/naif/toolkit.html).
+This library provides a C++ interface querying, reading and writing NAIF SPICE kernels. Built on the [NAIF Toolkit](https://naif.jpl.nasa.gov/naif/toolkit.html).
+
+
+## Try it over the REST API
+
+The plot below is **two years of Cassini's Saturn tour**: 20 000 states that the
+[hosted service](https://astrogeology.usgs.gov/apis/spiceql/latest/docs) builds
+out of 37 SPKs. The kernels stay on the server: gigabytes that would never be
+worth shipping to a page, and all that comes back is numbers.
+
+Nothing is fetched until you press **Run**: not the plotting library, not a
+state. Edit the code and run it again as often as you like; the pane above the
+code logs every request the snippet makes, with the points each one returned.
+
+See [API docs](https://astrogeology.usgs.gov/docs/getting-started/using-spiceql/exploring-spiceqls-rest-python-and-cpp-apis/#__tabbed_3_1) for examples of SpiceQL functions. 
+
+<div class="sq-app sq-app--rest" data-sq-rest markdown="1">
+
+<div class="sq-app__kernels">
+  <p class="sq-app__head">
+    <span class="sq-app__title">Requests</span>
+    <span class="sq-app__hint">Every HTTP call the code makes, in order, with what came
+      back, including the points each one returned. Two epoch conversions, then one
+      ranged call that answers with all 20&nbsp;000 states.</span>
+  </p>
+  <ol class="sq-app__stack" data-sq-log></ol>
+</div>
+
+```js
+import Plotly from 'https://cdn.jsdelivr.net/npm/plotly.js-gl3d-dist-min/+esm';
+
+// Every endpoint answers {statusCode, body: {return, kernels}}, so one helper
+// covers the whole API. `plot` is the element below.
+const API = 'https://astrogeology.usgs.gov/apis/spiceql/latest';
+
+async function spiceql(endpoint, params) {
+  const response = await fetch(`${API}/${endpoint}?${new URLSearchParams(params)}`);
+  if (!response.ok) throw new Error(`${endpoint}: HTTP ${response.status}`);
+  // SPICE failures come back INSIDE an HTTP 200 as {statusCode: 500, body:
+  // {error}}; so the envelope is what says whether this worked. Skip this and
+  // a failed call returns a body with no `return`, and the first thing you do
+  // with it throws something unrelated several lines later.
+  const { statusCode, body } = await response.json();
+  if (statusCode !== 200) throw new Error(`${endpoint}: ${body?.error ?? statusCode}`);
+  return body;
+}
+
+// Call utcToEt on datetimes in range. getTargetStatesRanged can fail if there is a hole 
+// anywhere in a step between start stop time window.  
+const { return: etStart } = await spiceql('utcToEt', { utc: '2008-07-01T00:00:00' });
+const { return: etStop }  = await spiceql('utcToEt', { utc: '2010-09-14T00:00:00' });
+
+// getTargetStatesRanged calls a vecotized routine. Far more effecient that calling for 
+// ETs indivdidualy as it minimizes calls.  
+const { return: states, kernels } = await spiceql('getTargetStatesRanged', {
+  startEt: etStart,
+  stopEt: etStop,
+  numRecords: 20000,
+  target: 'Cassini',
+  observer: 'SATURN BARYCENTER',
+  frame: 'J2000',
+  abcorr: 'None',
+  mission: 'cassini',
+  limitSpk: -1,
+  limitCk: -1,
+  searchKernels: true,
+});
+console.log(`${states.length} states from ${kernels.spk.length} SPKs`);
+
+// plot code 
+const days = states.map((_, i) => (etStart + (i * (etStop - etStart)) / (states.length - 1)));
+
+Plotly.newPlot(plot, [{
+  type: 'scatter3d', mode: 'lines', name: 'Cassini',
+  x: states.map(s => s[0]), y: states.map(s => s[1]), z: states.map(s => s[2]),
+  line: { width: 2, color: days, colorscale: 'YlOrRd', reversescale: true },
+}, {
+  type: 'scatter3d', mode: 'markers', name: 'Saturn barycentre',
+  x: [0], y: [0], z: [0], marker: { size: 4, color: '#E8C36A' },
+}], {
+  margin: { l: 10, r: 10, t: 10, b: 10 },
+  showlegend: false,
+  paper_bgcolor: 'rgba(0,0,0,0)',
+  scene: {
+    // One kilometre is the same length on all three axes, so the orbit keeps
+    // its shape instead of being stretched to fill the box.
+    aspectmode: 'data',
+    camera: { eye: { x: 1.6, y: 1.6, z: 1.1 } },
+    xaxis: { title: 'X (km)' }, yaxis: { title: 'Y (km)' }, zaxis: { title: 'Z (km)' },
+  },
+});
+```
+
+<p class="sq-app__bar">
+  <button class="md-button md-button--primary" type="button" data-sq-run>Run</button>
+  <span class="sq-app__status" data-sq-status role="status">
+    Nothing to download but numbers; the kernels stay on the server. About
+    1.7&nbsp;MB for the plotting library, then 2.6&nbsp;MB for 20&nbsp;000 states.
+  </span>
+</p>
+
+<div class="sq-app__plot" data-sq-plot>
+  <p class="sq-app__placeholder">
+    <span class="sq-app__placeholder-mark" aria-hidden="true"></span>
+    Press <b>Run</b> to plot 20&nbsp;000 Cassini states, fetched live from the
+    service. Nothing is downloaded until you do.
+  </p>
+</div>
+
+</div>
+
+<script type="module" src="assets/spiceql-rest.js"></script>
 
 
 ## Getting Started
 
-We reccomend installing using [miniforge](https://github.com/conda-forge/miniforge) 
+You can install using [Anaconda](https://www.anaconda.com/download/success?reg=skipped) or [miniforge](https://github.com/conda-forge/miniforge).
 
 ```
-mamba install -c conda-forge spiceql
+conda install -c conda-forge spiceql
 ```
 
-To create the inital database, set your required environment variables. 
+To create the initial database, set your required environment variables. 
 
 ```bash 
-# Path to some directory with kernels. SpiceQL searches for them recusively
+# Path to some directory with kernels. SpiceQL searches for them recursively
 export SPICEROOT="path/to/spice/kernels/"
 # anywhere you have write permissions to
 export SPICEQL_CACHE_DIR="path/to/cache/"
 ```
 
-Run `create_database()`, this is more easily done through python. 
+Run `create_database()`; this is more easily done through python. 
 
 !!! warning 
-    This might take serveral hours depending on the number of kernels in your folder
+    This might take several hours depending on the number of kernels in your folder
 
 ```bash 
 SPICEQL_LOG_LEVEL=INFO python -c "import pyspiceql; pyspiceql.create_database()"
@@ -90,13 +201,73 @@ SPICEQL_LOG_LEVEL=INFO python -c "import pyspiceql; pyspiceql.create_database()"
     // Make a query and it will return the kernels used 
     auto [orientations, kernels2] = SpiceQL::getTargetOrientations({690201375.8323615}, -74000, -74690, "ctx", {"smithed", "reconstructed"}, false, true);
     std::cout << kernels2.dump(2) << std::endl;
-    // nx4 aray of quaternions 
+    // nx4 array of quaternions 
     std::cout << orientations.size() << std::endl;
     ```
 
+=== "JavaScript"
+
+    SpiceQL compiles to WebAssembly, so the same `api.h` calls run in the browser
+    through Embind. Two differences shape the example. The browser build ships no
+    HDF5 inventory, so **there is no kernel search**, `searchForKernelsets` and
+    `searchKernels: true` both throw, and kernels are furnished explicitly. And
+    the WASM signatures take no `mission` argument since there is no search.
+
+    Fetching and furnishing those kernels is the harness's job, not the example's,
+    so it happens in the pane above the code and `spiceql` arrives already loaded.
+    Press **Run**; nothing downloads until you do, and the browser caches it, so
+    a second run is instant.
+
+    <div class="sq-exec" data-sq-exec markdown="1">
+
+    <div class="sq-exec__files">
+      <p class="sq-exec__head">
+        <span class="sq-exec__title">Downloads</span>
+        <span class="sq-exec__hint">The module and the kernels this example furnishes,
+          fetched on Run and then served from the browser cache. One 115&nbsp;KB frame
+          kernel is all it needs: the CTX-to-bus rotation is a fixed mounting offset
+          written down in the FK, so no CK has to be loaded to read it.</span>
+      </p>
+      <ol class="sq-exec__stack" data-sq-downloads></ol>
+    </div>
+
+    ```js
+    const { result: orientations } = spiceql.getTargetOrientations(
+      [690201375.8323615], -74000, -74690);
+
+    const [w, x, y, z, ...angularVelocity] = orientations[0];
+    console.log('quaternion:', [w, x, y, z]);
+    console.log('angular velocity (rad/s):', angularVelocity);
+
+    const degrees = 2 * Math.acos(Math.min(1, Math.abs(w))) * 180 / Math.PI;
+    console.log(`a fixed rotation of ${degrees.toFixed(4)} degrees`);
+
+    // The one api.h feature the browser build does not have.
+    try {
+      spiceql.getTargetOrientations([690201375.8323615], -74000, -74690,
+                                    { searchKernels: true });
+    } catch (err) {
+      console.log('searchKernels: true ->', err.message);
+    }
+    ```
+
+    <p class="sq-exec__bar">
+      <button class="md-button md-button--primary" type="button" data-sq-run>Run</button>
+      <span class="sq-exec__status" data-sq-status role="status">
+        Nothing runs until you press Run. The first run fetches about
+        3&nbsp;MB: the WASM module, its config DB, and the one kernel above.
+      </span>
+    </p>
+
+    <pre class="sq-exec__out" data-sq-out></pre>
+
+    </div>
+
+<script type="module" src="assets/spiceql-runner.js"></script>
+
 ### Online Interface 
 
-Some functions allow for running over the web, these contain the optional parameter `useWeb`. See the [function list](SpiceQLCPPAPI/namespace_spice_q_l.md) for a list of functions with this parameter. 
+Some functions allow for running over the web; these contain the optional parameter `useWeb`. See the [function list](SpiceQLCPPAPI/namespace_spice_q_l.md) for a list of functions with this parameter. 
 
 === "Python"
 
@@ -104,7 +275,7 @@ Some functions allow for running over the web, these contain the optional parame
     import pyspiceql as psql 
 
     # Make a query and it will return the kernels used 
-    orientations, kernels = spql.getTargetOrientations([690201375.8323615], -74000, -74690, "ctx", useWeb=True) 
+    orientations, kernels = psql.getTargetOrientations([690201375.8323615], -74000, -74690, "ctx", useWeb=True) 
     print(kernels)
     print(orientations)
     ```
@@ -118,7 +289,7 @@ Some functions allow for running over the web, these contain the optional parame
     // Make a query and it will return the kernels used 
     auto [orientations, kernels] = SpiceQL::getTargetOrientations({690201375.8323615}, -74000, -74690, "ctx", {"smithed", "reconstructed"}, true);
     std::cout << kernels.dump(2) << std::endl;
-    // nx4 aray of quaternions 
+    // nx4 array of quaternions 
     std::cout << orientations.size() << std::endl;
     ```
 
@@ -149,6 +320,10 @@ Some functions allow for running over the web, these contain the optional parame
 
     Download data from [NAIF](https://naif.jpl.nasa.gov/naif/data_archived.html) 
 
-    You can download using `wget` or similar application. 
+    You can download using `wget` or a similar application. 
 
+## Bots 
 
+<!-- HTML rather than markdown links: llmstxt writes these files after mkdocs
+     validates links, so markdown links to them warn (and fail --strict). -->
+These docs ship with <a href="llms.txt">llms.txt</a> and <a href="llms-full.txt">llms-full.txt</a> for bots to read for learning the library. 
