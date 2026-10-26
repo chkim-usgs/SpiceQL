@@ -62,6 +62,16 @@ namespace SpiceQL {
   string DB_TIME_FILES_KEY = "path_index";
   string DB_START_TIME_INDICES_KEY = "start_kindex";
   string DB_STOP_TIME_INDICES_KEY = "stop_kindex";
+  string DB_INTERVAL_START_KEY = "intervals_start";
+  string DB_INTERVAL_STOP_KEY = "intervals_stop";
+  string DB_INTERVAL_START_INDICES_KEY = "intervals_start_kindex";
+  string DB_INTERVAL_STOP_INDICES_KEY = "intervals_stop_kindex";
+  string DB_INTERVAL_BODY_CODES_KEY = "interval_body_code";
+  string DB_SEGMENT_START_KEY = "segments_start";
+  string DB_SEGMENT_STOP_KEY = "segments_stop";
+  string DB_SEGMENT_START_INDICES_KEY = "segments_start_kindex";
+  string DB_SEGMENT_STOP_INDICES_KEY = "segments_stop_kindex";
+  string DB_SEGMENT_BODY_CODES_KEY = "segment_body_code";
   string DB_FRAME_CACHE_KEY = "spql_cache";
   string DB_FRAME_LIST_KEY = "spql_cache/frame_list";
   string DB_FRAME_CODES_KEY = "spql_cache/frame_codes";
@@ -219,6 +229,33 @@ namespace SpiceQL {
             p2.first+=0.001; 
           }  
           kernel_times->stop_times.insert(p2);
+
+          // Intervals and segments are extra data next to the bounds above, so
+          // a kernel they can't be read for keeps its bounds and gets no rows.
+          try {
+            KernelCoverage coverage = getKernelCoverage(kernel);
+
+            kernel_times->interval_starts.insert(kernel_times->interval_starts.end(),
+                coverage.interval_starts.begin(), coverage.interval_starts.end());
+            kernel_times->interval_stops.insert(kernel_times->interval_stops.end(),
+                coverage.interval_stops.begin(), coverage.interval_stops.end());
+            kernel_times->interval_body_codes.insert(kernel_times->interval_body_codes.end(),
+                coverage.interval_body_codes.begin(), coverage.interval_body_codes.end());
+            kernel_times->interval_kindex.insert(kernel_times->interval_kindex.end(),
+                coverage.interval_starts.size(), index);
+
+            kernel_times->segment_starts.insert(kernel_times->segment_starts.end(),
+                coverage.segment_starts.begin(), coverage.segment_starts.end());
+            kernel_times->segment_stops.insert(kernel_times->segment_stops.end(),
+                coverage.segment_stops.begin(), coverage.segment_stops.end());
+            kernel_times->segment_body_codes.insert(kernel_times->segment_body_codes.end(),
+                coverage.segment_body_codes.begin(), coverage.segment_body_codes.end());
+            kernel_times->segment_kindex.insert(kernel_times->segment_kindex.end(),
+                coverage.segment_starts.size(), index);
+          }
+          catch (exception &e) {
+            SPDLOG_WARN("Could not collect intervals and segments for {}: {}", std::string(kernel), e.what());
+          }
 
           // get relative path to make db portable 
           fs::path relative_path_kernel = fs::relative(kernel, fs::absolute(getDataDirectory()));
@@ -808,6 +845,26 @@ namespace SpiceQL {
         H5Easy::dump(file, DB_SPICE_ROOT_KEY + "/"+kernel_key+"/"+DB_STOP_TIME_KEY, stop_times_v, H5Easy::DumpMode::Overwrite);
         H5Easy::dump(file, DB_SPICE_ROOT_KEY + "/"+kernel_key+"/"+DB_START_TIME_INDICES_KEY, start_indices_v, H5Easy::DumpMode::Overwrite);
         H5Easy::dump(file, DB_SPICE_ROOT_KEY + "/"+kernel_key+"/"+DB_STOP_TIME_INDICES_KEY, stop_indices_v, H5Easy::DumpMode::Overwrite);
+
+        // Intervals and segments are row-aligned rather than sorted per column
+        // like the times above: row i of every dataset in a set describes the
+        // same interval (or segment), so a start keeps its stop and body code.
+        // The start and stop kindex datasets therefore hold the same values.
+        string group_key = DB_SPICE_ROOT_KEY + "/" + kernel_key + "/";
+        if (kernels->interval_starts.size() > 0) {
+          H5Easy::dump(file, group_key + DB_INTERVAL_START_KEY, kernels->interval_starts, H5Easy::DumpMode::Overwrite);
+          H5Easy::dump(file, group_key + DB_INTERVAL_STOP_KEY, kernels->interval_stops, H5Easy::DumpMode::Overwrite);
+          H5Easy::dump(file, group_key + DB_INTERVAL_START_INDICES_KEY, kernels->interval_kindex, H5Easy::DumpMode::Overwrite);
+          H5Easy::dump(file, group_key + DB_INTERVAL_STOP_INDICES_KEY, kernels->interval_kindex, H5Easy::DumpMode::Overwrite);
+          H5Easy::dump(file, group_key + DB_INTERVAL_BODY_CODES_KEY, kernels->interval_body_codes, H5Easy::DumpMode::Overwrite);
+        }
+        if (kernels->segment_starts.size() > 0) {
+          H5Easy::dump(file, group_key + DB_SEGMENT_START_KEY, kernels->segment_starts, H5Easy::DumpMode::Overwrite);
+          H5Easy::dump(file, group_key + DB_SEGMENT_STOP_KEY, kernels->segment_stops, H5Easy::DumpMode::Overwrite);
+          H5Easy::dump(file, group_key + DB_SEGMENT_START_INDICES_KEY, kernels->segment_kindex, H5Easy::DumpMode::Overwrite);
+          H5Easy::dump(file, group_key + DB_SEGMENT_STOP_INDICES_KEY, kernels->segment_kindex, H5Easy::DumpMode::Overwrite);
+          H5Easy::dump(file, group_key + DB_SEGMENT_BODY_CODES_KEY, kernels->segment_body_codes, H5Easy::DumpMode::Overwrite);
+        }
       }
     }
 

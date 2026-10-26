@@ -9,6 +9,8 @@
 #include <regex>
 #include <chrono>
 #include <unordered_set>
+#include <algorithm>
+#include <tuple>
 #include <cmath>
 #include <cstring>
 #include <float.h>
@@ -942,6 +944,155 @@ namespace SpiceQL {
     }
 
     return pair<double, double>(start_time, stop_time);
+  }
+
+
+  KernelCoverage getKernelCoverage(string kpath) {
+    SPDLOG_TRACE("getKernelCoverage({})", kpath);
+
+    string resolved = kpath;
+    if (!fs::exists(resolved)) {
+      resolved = (getDataDirectory() / fs::path(kpath)).string();
+    }
+
+    SpiceChar arch[33], ktype[33];
+    checkNaifErrors();
+    getfat_c(resolved.c_str(), 33, 33, arch, ktype);
+    checkNaifErrors();
+
+    const string type = ktype;
+    if (type != "CK" && type != "SPK") {
+      throw invalid_argument("Kernel [" + kpath + "] is a " + type +
+                             ", which has no coverage to collect");
+    }
+
+    KernelCoverage coverage;
+
+    // Intervals: one coverage window per NAIF ID, as kerneldbgen does. Each
+    // window is already merged and sorted, but windows of different IDs can
+    // overlap each other, which is why the body code is kept per row.
+    SPICEINT_CELL(ids, 1000);
+    scard_c(0, &ids);
+    if (type == "SPK") {
+      spkobj_c(resolved.c_str(), &ids);
+    }
+    else {
+      ckobj_c(resolved.c_str(), &ids);
+    }
+    checkNaifErrors();
+
+    //  200,000 is the max coverage window size kerneldbgen allows
+    SPICEDOUBLE_CELL(cover, 200000);
+    for (SpiceInt i = 0; i < card_c(&ids); i++) {
+      SpiceInt id = SPICE_CELL_ELEM_I(&ids, i);
+      if (id >= 0) continue;
+
+      scard_c(0, &cover);
+      if (type == "SPK") {
+        spkcov_c(resolved.c_str(), id, &cover);
+      }
+      else {
+        ckcov_c(resolved.c_str(), id, SPICEFALSE, "INTERVAL", 0.0, "TDB", &cover);
+      }
+      checkNaifErrors();
+
+      for (SpiceInt j = 0; j < wncard_c(&cover); j++) {
+        SpiceDouble begin, end;
+        wnfetd_c(&cover, j, &begin, &end);
+        coverage.interval_starts.push_back(begin);
+        coverage.interval_stops.push_back(end);
+        coverage.interval_body_codes.push_back((int)id);
+      }
+      checkNaifErrors();
+    }
+
+    // Segments: the raw descriptor bounds, walked the same way
+    // getKernelStartStopTimes walks them.
+    SpiceInt handle = 0;
+    dafopr_c(resolved.c_str(), &handle);
+    checkNaifErrors();
+
+    try {
+      SpiceInt nd = 0, ni = 0, fward = 0, bward = 0, freeAddr = 0;
+      SpiceChar ifname[61];
+      dafrfr_c(handle, 61, &nd, &ni, ifname, &fward, &bward, &freeAddr);
+      checkNaifErrors();
+
+      SpiceDouble summary[128];
+      SpiceDouble dc[128];
+      SpiceInt ic[128];
+
+      dafbfs_c(handle);
+      checkNaifErrors();
+
+      SpiceBoolean found = SPICEFALSE;
+      daffna_c(&found);
+      checkNaifErrors();
+
+      while (found) {
+        dafgs_c(summary);
+        dafus_c(summary, nd, ni, dc, ic);
+        checkNaifErrors();
+
+        if (ic[0] < 0) {
+          double segStart = dc[0];
+          double segStop  = dc[1];
+
+          if (type == "CK") {
+            // ckmeta_c resolves the SCLK the same way ckcov_c does, honoring a
+            // CK_<id>_SCLK assignment before falling back to id / 1000.
+            SpiceInt sclk = 0;
+            ckmeta_c(ic[0], "SCLK", &sclk);
+            sct2e_c(sclk, dc[0], &segStart);
+            sct2e_c(sclk, dc[1], &segStop);
+            checkNaifErrors();
+          }
+
+          coverage.segment_starts.push_back(segStart);
+          coverage.segment_stops.push_back(segStop);
+          coverage.segment_body_codes.push_back((int)ic[0]);
+        }
+
+        daffna_c(&found);
+        checkNaifErrors();
+      }
+    }
+    catch (...) {
+      dafcls_c(handle);
+      throw;
+    }
+
+    dafcls_c(handle);
+    checkNaifErrors();
+
+    // Sort each row set by start, then stop, then body code, keeping the
+    // columns of a row together.
+    auto sortRows = [](vector<double> &starts, vector<double> &stops, vector<int> &codes) {
+      vector<size_t> order(starts.size());
+      for (size_t i = 0; i < order.size(); i++) order[i] = i;
+      sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+        return tie(starts[a], stops[a], codes[a]) < tie(starts[b], stops[b], codes[b]);
+      });
+
+      vector<double> sortedStarts, sortedStops;
+      vector<int> sortedCodes;
+      sortedStarts.reserve(order.size());
+      sortedStops.reserve(order.size());
+      sortedCodes.reserve(order.size());
+      for (size_t i : order) {
+        sortedStarts.push_back(starts[i]);
+        sortedStops.push_back(stops[i]);
+        sortedCodes.push_back(codes[i]);
+      }
+      starts = std::move(sortedStarts);
+      stops = std::move(sortedStops);
+      codes = std::move(sortedCodes);
+    };
+
+    sortRows(coverage.interval_starts, coverage.interval_stops, coverage.interval_body_codes);
+    sortRows(coverage.segment_starts, coverage.segment_stops, coverage.segment_body_codes);
+
+    return coverage;
   }
 
 

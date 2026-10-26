@@ -144,6 +144,42 @@ namespace SpiceQL {
 
   std::pair<double, double> getKernelStartStopTimes(std::string kpath);
 
+
+  /**
+    * @brief Coverage of one CK or SPK, as interval and segment rows.
+    *
+    * Each set of vectors is row-aligned: row i of interval_starts,
+    * interval_stops and interval_body_codes describes one interval, and the
+    * same holds for the segment vectors. Rows are sorted by start time.
+    **/
+  struct KernelCoverage {
+    std::vector<double> interval_starts;
+    std::vector<double> interval_stops;
+    std::vector<int> interval_body_codes;
+
+    std::vector<double> segment_starts;
+    std::vector<double> segment_stops;
+    std::vector<int> segment_body_codes;
+  };
+
+
+  /**
+    * @brief Get the coverage intervals and segments of a kernel.
+    *
+    * Intervals come from spkcov_c / ckcov_c, one coverage window per NAIF ID,
+    * the way ISIS's kerneldbgen gets them. CK coverage is taken at the
+    * INTERVAL level, so gaps inside a segment show up. Segments are the raw DAF
+    * descriptor bounds. Only negative IDs (spacecraft and instruments) are
+    * included, matching getKernelStartStopTimes. All times are ET.
+    *
+    * CK times are encoded SCLK, so the kernel's SCLK and an LSK must already be
+    * furnished.
+    *
+    * @param kpath Path to the kernel
+    * @returns the kernel's intervals and segments
+    **/
+  KernelCoverage getKernelCoverage(std::string kpath);
+
   std::string globKernelStartStopTimes(std::string mission);
 
   /**
