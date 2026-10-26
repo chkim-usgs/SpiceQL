@@ -1,4 +1,5 @@
 from ast import literal_eval
+import json
 from typing import Annotated, Any, Union
 from fastapi import Query, HTTPException
 from pydantic import BaseModel, Field, field_validator, ValidationInfo
@@ -688,6 +689,29 @@ class OverwriteParam():
                 }
             )] = False):
         self.value = overwrite
+
+
+class OptionsParam():
+    def __init__(
+            self,
+            options: Annotated[str, Query(
+                description="Optional JSON object of post-processing flags applied "
+                            "to the kernel search result. Empty (the default) "
+                            "returns the raw result unchanged. Keys: "
+                            "\"pck\":\"mission\" or \"pck\":\"latest\"",
+                openapi_examples={
+                    "default": {
+                        "summary": "Raw result (no post-processing)",
+                        "value": "{}"
+                    }
+                }
+            )] = "{}"):
+        # Accept either a JSON string (query param) or an already-parsed dict.
+        if isinstance(options, str):
+            options = options.strip()
+            self.value = json.loads(options) if options else {}
+        else:
+            self.value = options or {}
 
 
 class PrecisionParam():

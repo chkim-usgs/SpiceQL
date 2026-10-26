@@ -180,6 +180,112 @@ namespace SpiceQL {
       }
       return owners;
     }
+
+
+    // The generic NAIF planetary-constants kernels (pckNNNNN.tpc) are shipped as
+    // a copy in nearly every mission tree, so an inherited or unanchored search
+    // picks one up from each one it walks (odyssey, mars, ...). Only a single
+    // generic pck is ever needed. Collapse them down to one, preferring -- in
+    // order -- a copy under one of the preferred mission directories (the queried
+    // mission(s) first, so a mission-specific pck wins), then a copy under base/,
+    // then the lexically-last basename (highest version). Body- and
+    // mission-specific pcks (moon_080317.tf, pck00010_msgr_v##.tpc,
+    // dawn_vesta_v##.tf) are NOT generic -- they define body orientation -- so
+    // every one of them is kept untouched.
+    // Collapse the generic pckNNNNN.tpc copies (one may be shipped under every
+    // mission tree) down to a single kernel. preferLatest selects which copy
+    // survives: false -> the queried mission's own copy, then base/, then the
+    // highest version as a last resort; true -> always the highest version
+    // regardless of directory (so mro/pck/pck00008.tpc loses to
+    // base/pck/pck00009.tpc). Non-generic pcks (moon_080317.tf, etc.) are left
+    // untouched.
+    void collapseGenericPcks(json &kernels, const vector<string> &preferred,
+                             bool preferLatest = false) {
+      if (!kernels.contains("pck") || !kernels["pck"].is_array()) return;
+
+      static const std::regex genericRegex("^pck[0-9]+\\.tpc$",
+                                       std::regex::icase | std::regex::optimize);
+
+      vector<string> specificPcks;
+      vector<string> genericPcks;
+      for (auto &kernel : kernels["pck"]) {
+        string path = kernel.get<string>();
+        string basePath = fs::path(path).filename().string();
+        if (std::regex_match(basePath, genericRegex)) genericPcks.push_back(path);
+        else specificPcks.push_back(path);
+      }
+
+      // 0 or 1 generic: nothing to collapse, leave the list exactly as it was.
+      if (genericPcks.size() <= 1) return;
+
+      auto hasComponent = [](const string &path, const string &mission) {
+        for (const auto &part : fs::path(path)) {
+          if (toLower(part.string()) == mission) return true;
+        }
+        return false;
+      };
+
+      string chosen;
+      // "latest" skips the directory preference and takes the highest version
+      // outright; "mission" tries the preferred trees first and only falls back
+      // to the highest version when no preferred copy exists.
+      if (!preferLatest) {
+        // 1) a copy under a preferred mission directory, in preference order.
+        for (const auto &m : preferred) {
+          string ml = toLower(m);
+          for (const auto &g : genericPcks) {
+            if (hasComponent(g, ml)) { chosen = g; break; }
+          }
+          if (!chosen.empty()) break;
+        }
+        // 2) a copy under base/.
+        if (chosen.empty()) {
+          for (const auto &g : genericPcks) {
+            if (hasComponent(g, "base")) { chosen = g; break; }
+          }
+        }
+      }
+      // 3) the highest-versioned basename (the only rule when preferLatest, and
+      //    the fallback otherwise).
+      if (chosen.empty()) {
+        chosen = genericPcks.front();
+        for (const auto &g : genericPcks) {
+          if (fs::path(g).filename().string() > fs::path(chosen).filename().string()) {
+            chosen = g;
+          }
+        }
+      }
+
+      specificPcks.push_back(chosen);
+      kernels["pck"] = specificPcks;
+    }
+
+
+    // Opt-in result filtering. With no options the result is returned exactly as
+    // the raw search produced it. Recognized keys (snake_case, ALE-style):
+    //   "pck": "mission"        collapse generic pckNNNNN.tpc to one, preferring
+    //                           the queried mission's copy, then base/
+    //   "pck": "latest"         collapse generic pckNNNNN.tpc to the highest
+    void applyOptions(json &kernels, const json &options, const vector<string> &preferred) {
+      if (!options.is_object() || options.empty()) return;
+
+      auto boolProp = [&](const string &key, bool fallback) {
+        if (options.contains(key) && options[key].is_boolean()) return options[key].get<bool>();
+        return fallback;
+      };
+
+      // pck collapse: "mission" prefers the queried mission's copy; "latest"
+      // takes the highest version regardless of tree.
+      bool collapsePcks = false;
+      bool pckPreferLatest = false;
+      if (options.contains("pck") && options["pck"].is_string()) {
+        string pckMode = toLower(options["pck"].get<string>());
+        collapsePcks = (pckMode == "mission" || pckMode == "latest");
+        pckPreferLatest = (pckMode == "latest");
+      }
+
+      if (collapsePcks) collapseGenericPcks(kernels, preferred, pckPreferLatest);
+    }
   }
 
 
@@ -513,11 +619,12 @@ namespace SpiceQL {
 
 
   json InventoryImpl::search_for_kernelsets(vector<string> spiceql_names, vector<Kernel::Type> types, double start_time, double stop_time,
-                                  vector<Kernel::Quality> ckQualities, vector<Kernel::Quality> spkQualities, bool full_kernel_path, 
-                                  int limit_ck, int limit_spk, bool overwrite) { 
+                                  vector<Kernel::Quality> ckQualities, vector<Kernel::Quality> spkQualities, bool full_kernel_path,
+                                  int limit_ck, int limit_spk, bool overwrite, json options) { 
       json kernels;
-      // simply iterate over the names
-      for(auto &name : spiceql_names) { 
+      // simply iterate over the names. Options are applied once on the merged
+      // result below, not per name, so the per-name search is left raw here.
+      for(auto &name : spiceql_names) {
         json subKernels = search_for_kernelset(name, types, start_time, stop_time,
                                   ckQualities, spkQualities, full_kernel_path, limit_ck, limit_spk); 
                                   
@@ -525,13 +632,16 @@ namespace SpiceQL {
         SPDLOG_TRACE("Overwrite? {}", overwrite);
         merge_json(kernels, subKernels, overwrite);
       }
+      // Opt-in only: with empty options this is a no-op and the raw merged result
+      // is returned unchanged.
+      applyOptions(kernels, options, spiceql_names);
       return kernels;
   }
 
 
   json InventoryImpl::search_for_kernelset(string spiceql_name, vector<Kernel::Type> types, double start_time, double stop_time,
                                   vector<Kernel::Quality> ckQualities, vector<Kernel::Quality> spkQualities, bool full_kernel_path,
-                                  int limit_ck, int limit_spk) { 
+                                  int limit_ck, int limit_spk, json options) { 
     // get time dep kernels first 
     json kernels;
     spiceql_name = toLower(spiceql_name);
@@ -749,6 +859,11 @@ namespace SpiceQL {
         }
       }
     }
+    // Opt-in only. A single name can carry several generic pcks when its search
+    // was unanchored (inherited pck with no mission data dir of its own, e.g.
+    // ctx); options like {"pck": "mission"} collapse them. Empty options is a
+    // no-op, so the default result is unchanged.
+    applyOptions(kernels, options, {spiceql_name});
     return kernels;
   }
   

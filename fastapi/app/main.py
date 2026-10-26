@@ -663,7 +663,8 @@ async def searchForKernelsets(
     ckQualities: Annotated[CkQualitiesParam, Depends()],
     spkQualities: Annotated[SpkQualitiesParam, Depends()],
     commonParams: Annotated[CommonParams, Depends()],
-    overwrite: Annotated[OverwriteParam, Depends()]):
+    overwrite: Annotated[OverwriteParam, Depends()],
+    options: Annotated[OptionsParam, Depends()]):
     try:
         logger.debug("Calling searchForKernelsets ....")
         result, kernels = pyspiceql.searchForKernelsets(
@@ -677,7 +678,8 @@ async def searchForKernelsets(
             commonParams.fullKernelPath,
             commonParams.limitCk,
             commonParams.limitSpk,
-            overwrite.value)
+            overwrite.value,
+            options.value)
         body = ResultModel(result=result, kernels=kernels)
         return ResponseModel(statusCode=200, body=body)
     except Exception as e:

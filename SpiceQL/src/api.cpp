@@ -1452,7 +1452,8 @@ namespace SpiceQL {
                                                           bool fullKernelPath, 
                                                           int limitCk, 
                                                           int limitSpk,
-                                                          bool overwrite) {
+                                                          bool overwrite,
+                                                          nlohmann::json options) {
     SPDLOG_TRACE("Calling searchForKernelsets with {}, {}, {}, {}, {}, {}, {}", spiceqlNames, types, startTime, stopTime, ckQualities.size(), spkQualities.size(), useWeb);
     
       if (useWeb){
@@ -1466,13 +1467,14 @@ namespace SpiceQL {
             {"fullKernelPath", fullKernelPath},
             {"limitCk", limitCk},
             {"limitSpk", limitSpk},
-            {"overwrite", overwrite}
+            {"overwrite", overwrite},
+            {"options", options}
         });
         json out = spiceAPIQuery("searchForKernelsets", args);
         string kvect = out["body"]["return"];
         return make_pair(kvect, out["body"]["kernels"]);
       }
-      json kernels = Inventory::search_for_kernelsets(spiceqlNames, types, startTime, stopTime, ckQualities, spkQualities, fullKernelPath, limitCk, limitSpk, overwrite);
+      json kernels = Inventory::search_for_kernelsets(spiceqlNames, types, startTime, stopTime, ckQualities, spkQualities, fullKernelPath, limitCk, limitSpk, overwrite, options);
       return {"", kernels};
   }
 }

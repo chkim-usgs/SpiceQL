@@ -683,6 +683,7 @@ namespace SpiceQL {
      * @param limitCk limitCk int number of cks to limit to, default is -1 to retrieve all
      * @param limitSpk int number of spks to limit to, default is 1 to retrieve only one
      * @param overwrite subkernels will take precedent over parent mission kernels if true
+     * @param options optional JSON dict of result-filtering options, default none
      *
      * @returns An empty return and list of kernels
      **/
@@ -697,5 +698,6 @@ namespace SpiceQL {
         bool fullKernelPath=false,
         int limitCk=-1, 
         int limitSpk=1, 
-        bool overwrite=false);
+        bool overwrite=false,
+        nlohmann::json options=nlohmann::json::object());
 }

@@ -21,6 +21,20 @@ namespace SpiceQL {
   }
 
 
+  // Copy out every deps list, keyed by the pointer it sits at, so
+  // getRootDependency can still walk them after resolveConfigDependencies has
+  // merged and erased them. Without this, an entry with no data directory of
+  // its own (cassis -> /tgo, ctx -> /mro) never finds its dep's directory and
+  // its kernels get globbed from the root of the data area.
+  static json collectDeps(json &config) {
+    json deps;
+    for (auto &ptr : findKeyInJson(config, "deps", true)) {
+      deps[ptr] = config[ptr];
+    }
+    return deps;
+  }
+
+
   Config::Config() {
     string dbPath = getConfigDirectory(); 
     vector<string> json_paths = glob(dbPath, ".json");
@@ -33,6 +47,7 @@ namespace SpiceQL {
         config[it.key()] = it.value();
       }
     }
+    deps = collectDeps(config);
     resolveConfigDependencies(config, config);
   }
 
@@ -40,6 +55,7 @@ namespace SpiceQL {
   Config::Config(string j) {
     std::ifstream ifs(j);
     config = json::parse(ifs);
+    deps = collectDeps(config);
     resolveConfigDependencies(config, config);
   }
 
@@ -47,6 +63,15 @@ namespace SpiceQL {
   Config::Config(json j, string pointer) {
     config = j;
     confPointer = pointer;
+    deps = collectDeps(config);
+    resolveConfigDependencies(config, config);
+  }
+
+
+  Config::Config(json j, string pointer, json d) {
+    config = j;
+    confPointer = pointer;
+    deps = d;
     resolveConfigDependencies(config, config);
   }
 
@@ -60,7 +85,7 @@ namespace SpiceQL {
     json::json_pointer pbase(confPointer);
     pointer = (pbase / p).to_string();
     
-    Config conf(config, pointer);
+    Config conf(config, pointer, deps);
     return conf;
   }
 
@@ -72,7 +97,7 @@ namespace SpiceQL {
       eval_json[pointer] = j;
     }
 
-    return Config(eval_json, "");
+    return Config(eval_json, "", deps);
   }
 
   string Config::getParentPointer(string searchPointer, int pointerPosition) {
@@ -101,7 +126,7 @@ namespace SpiceQL {
     json::json_pointer fullPointer = pathMod;
 
   // If there is some dependency at the pointer requested, return that instead
-    string depPath = getRootDependency(config, fullPointer.to_string());
+    string depPath = getRootDependency(deps, fullPointer.to_string());
     if (depPath != "") {
       return depPath;
     }

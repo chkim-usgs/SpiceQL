@@ -459,7 +459,8 @@ val searchForKernelsets_w(const val &spiceqlNames, const val &opts) {
       optStrVec(opts, "spkQualities", kDefaultQualities),
       optBool(opts, "useWeb", false), optBool(opts, "fullKernelPath", false),
       optInt(opts, "limitCk", -1), optInt(opts, "limitSpk", 1),
-      optBool(opts, "overwrite", false));
+      optBool(opts, "overwrite", false),
+      hasKey(opts, "options") ? valToJson(opts["options"]) : nlohmann::json::object());
   return wrapPair(r);
   });
 }
