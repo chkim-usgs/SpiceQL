@@ -134,7 +134,8 @@ if(SPICEQL_BUILD_LIB)
                            ${SPICEQL_BUILD_INCLUDE_DIR}/inventory.h
                            ${SPICEQL_BUILD_INCLUDE_DIR}/inventoryimpl.h
                            ${SPICEQL_BUILD_INCLUDE_DIR}/api.h
-                           ${SPICEQL_BUILD_INCLUDE_DIR}/alias_map.h)
+                           ${SPICEQL_BUILD_INCLUDE_DIR}/alias_map.h
+                           ${SPICEQL_BUILD_INCLUDE_DIR}/daf_reader.h)
 
   set(SPICEQL_PRIVATE_HEADER_FILES ${SPICEQL_BUILD_INCLUDE_DIR}/memo.h
                                    ${SPICEQL_BUILD_INCLUDE_DIR}/restincurl.h)

@@ -10,6 +10,7 @@
 #include <SpiceQL/api.h>
 
 #include <algorithm>
+#include <map>
 #include <fstream>
 #include <SpiceQL/spiceql_logging.h>
 #include <highfive/highfive.hpp>
@@ -299,5 +300,47 @@ TEST_F(LroKernelSet, InferMissionInitCache) {
   // Restore original environment
   if (original_cache_dir != nullptr) {
     setenv("SPICEQL_CACHE_DIR", original_cache_dir, 1);
+  }
+}
+
+
+TEST_F(LroKernelSet, TestInventoryIntervalsAndSegments) {
+  fs::path dbfile = Inventory::getDbFilePath();
+  HighFive::File file(dbfile, HighFive::File::ReadOnly);
+
+  std::string group = "/spice/lroc/ck/reconstructed/";
+  auto paths = file.getDataSet(group + "path_index").read<std::vector<std::string>>();
+
+  // The existing time index is still written as before
+  EXPECT_EQ(file.getDataSet(group + "starttime").read<std::vector<double>>().size(), paths.size());
+
+  // Each fixture CK has one segment and one interpolation interval for -85000
+  std::map<std::string, std::pair<double, double>> expected = {
+    {"soc31_1111111_1111111_v21.bc", {110000000, 120000000}},
+    {"lrolc_1111111_1111111_v11.bc", {130000000, 140000000}}
+  };
+
+  for (std::string prefix : {"intervals_", "segments_"}) {
+    std::string codes_key = (prefix == "intervals_") ? "interval_body_code" : "segment_body_code";
+    auto starts = file.getDataSet(group + prefix + "start").read<std::vector<double>>();
+    auto stops = file.getDataSet(group + prefix + "stop").read<std::vector<double>>();
+    auto start_kindex = file.getDataSet(group + prefix + "start_kindex").read<std::vector<size_t>>();
+    auto stop_kindex = file.getDataSet(group + prefix + "stop_kindex").read<std::vector<size_t>>();
+    auto codes = file.getDataSet(group + codes_key).read<std::vector<int>>();
+
+    ASSERT_EQ(starts.size(), 2) << prefix;
+    ASSERT_EQ(stops.size(), 2) << prefix;
+    ASSERT_EQ(codes.size(), 2) << prefix;
+    EXPECT_EQ(start_kindex, stop_kindex) << prefix;
+
+    for (size_t i = 0; i < starts.size(); i++) {
+      // rows are grouped by kernel in path_index order
+      EXPECT_EQ(start_kindex[i], i) << prefix;
+      std::string name = fs::path(paths.at(start_kindex[i])).filename().string();
+      ASSERT_TRUE(expected.count(name)) << name;
+      EXPECT_NEAR(starts[i], expected[name].first, 1e-3) << prefix << name;
+      EXPECT_NEAR(stops[i], expected[name].second, 1e-3) << prefix << name;
+      EXPECT_EQ(codes[i], -85000) << prefix << name;
+    }
   }
 }

@@ -151,8 +151,13 @@ namespace SpiceQL {
     * Each set of vectors is row-aligned: row i of interval_starts,
     * interval_stops and interval_body_codes describes one interval, and the
     * same holds for the segment vectors. Rows are sorted by start time.
+    * start_time and stop_time are the kernel's bounds, the same values
+    * getKernelStartStopTimes returns.
     **/
   struct KernelCoverage {
+    double start_time = 0;
+    double stop_time = 0;
+
     std::vector<double> interval_starts;
     std::vector<double> interval_stops;
     std::vector<int> interval_body_codes;
@@ -172,6 +177,9 @@ namespace SpiceQL {
     * descriptor bounds. Only negative IDs (spacecraft and instruments) are
     * included, matching getKernelStartStopTimes. All times are ET.
     *
+    * The file is opened once and its segments walked once; the bounds come
+    * from the same walk, so callers don't need getKernelStartStopTimes too.
+    *
     * CK times are encoded SCLK, so the kernel's SCLK and an LSK must already be
     * furnished.
     *
@@ -179,6 +187,15 @@ namespace SpiceQL {
     * @returns the kernel's intervals and segments
     **/
   KernelCoverage getKernelCoverage(std::string kpath);
+
+
+  /**
+    * @brief Sort a coverage's interval and segment rows by start, then stop,
+    *        then body code, keeping each row's columns together.
+    *
+    * @param coverage The coverage to sort in place
+    **/
+  void sortCoverageRows(KernelCoverage &coverage);
 
   std::string globKernelStartStopTimes(std::string mission);
 

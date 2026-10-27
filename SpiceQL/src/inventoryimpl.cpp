@@ -33,9 +33,14 @@ namespace stdpmr = std::pmr;
 #include <highfive/H5Easy.hpp>
 #include <highfive/highfive.hpp>
 
+#include <atomic>
+#include <cstdlib>
+#include <thread>
+
 #include <SpiceUsr.h>
 
 #include <SpiceQL/config.h>
+#include <SpiceQL/daf_reader.h>
 #include <SpiceQL/inventoryimpl.h>
 #include <SpiceQL/utils.h>
 #include <SpiceQL/query.h>
@@ -193,7 +198,285 @@ namespace SpiceQL {
   }
 
 
-  void collectStartStopTimes(string mission, string type, string quality, TimeIndexedKernels *kernel_times) { 
+  // Coverage of one kernel, or the reason it couldn't be read.
+  struct CoverageResult {
+    bool ok = false;
+    string error;
+    KernelCoverage coverage;
+  };
+
+
+  // Number of threads for reading coverage, from $SPICEQL_DB_WORKERS or the
+  // number of cores.
+  static size_t coverageWorkerCount() {
+    const char *env = getenv("SPICEQL_DB_WORKERS");
+    if (env && *env) {
+      long n = strtol(env, nullptr, 10);
+      return n > 0 ? (size_t)n : 1;
+    }
+    size_t n = thread::hardware_concurrency();
+    return n > 0 ? n : 1;
+  }
+
+
+  // What the DAF reader gets from one kernel without CSPICE: the segments and
+  // per-ID windows of negative IDs, with CK times still in encoded SCLK.
+  struct DafRead {
+    bool ok = false;
+    string error;
+    bool isCk = false;
+    vector<daf::Summary> segments;
+    map<int, daf::Window> intervals;
+  };
+
+
+  // Thread safe: only daf_reader.h, no CSPICE calls.
+  static DafRead readDafCoverage(const string &kernel) {
+    DafRead read;
+    try {
+      string resolved = kernel;
+      if (!fs::exists(resolved)) {
+        resolved = (getDataDirectory() / fs::path(kernel)).string();
+      }
+
+      daf::File f(resolved);
+      const string kind = f.kind();
+      if (kind != "CK" && kind != "SPK") {
+        throw invalid_argument("Kernel [" + kernel + "] is a " + (kind.empty() ? f.idWord() : kind) +
+                               ", which has no coverage to collect");
+      }
+      read.isCk = kind == "CK";
+
+      // getKernelCoverage's ckcov_c window holds 200,000 doubles, the most
+      // kerneldbgen allows, so a kernel with more intervals than that for an
+      // ID fails there and keeps only its bounds. Fail the same way, so both
+      // readers put the same kernels in the database. The window is checked
+      // after each segment, so like ckcov_c this stops reading a kernel as
+      // soon as it overflows.
+      const size_t maxIntervals = 200000 / 2;
+
+      // Only negative IDs (spacecraft and instruments), as getKernelCoverage
+      // does, so a segment of another body is never read
+      for (const daf::Summary &s : f.summaries()) {
+        if (s.ic[0] >= 0) continue;
+        read.segments.push_back(s);
+        const int id = s.ic[0];
+        daf::Window &w = read.intervals[id];
+        if (read.isCk) {
+          daf::Window seg = daf::ckSegmentCoverage(f, s);
+          w.insert(w.end(), seg.begin(), seg.end());
+        }
+        else {
+          w.emplace_back(s.dc[0], s.dc[1]);
+        }
+        // Merging only shrinks a window, so it's only needed here once the
+        // unmerged one is too big
+        if (w.size() > maxIntervals) {
+          w = daf::merge(std::move(w));
+          if (w.size() > maxIntervals) {
+            throw runtime_error("Kernel [" + kernel + "] has more than " + to_string(maxIntervals) +
+                                " intervals for ID " + to_string(id) + ", more than a coverage window holds");
+          }
+        }
+      }
+      for (auto &[id, w] : read.intervals) {
+        w = daf::merge(std::move(w));
+      }
+      read.ok = true;
+    }
+    catch (exception &e) {
+      read.error = e.what();
+    }
+    return read;
+  }
+
+
+  /**
+   * Turns a DafRead into the same KernelCoverage getKernelCoverage gives,
+   * converting CK ticks to ET. Uses CSPICE, so it runs in the calling thread
+   * with the mission's SCLKs furnished.
+   **/
+  static CoverageResult convertDafCoverage(DafRead &read) {
+    CoverageResult result;
+    if (!read.ok) {
+      result.error = read.error;
+      return result;
+    }
+
+    try {
+      KernelCoverage &coverage = result.coverage;
+
+      // ckmeta_c resolves the SCLK the same way ckcov_c does, honoring a
+      // CK_<id>_SCLK assignment before falling back to id / 1000. It's a
+      // kernel pool lookup, so look each ID up once.
+      map<int, SpiceInt> clocks;
+      auto clockFor = [&](int id) {
+        auto it = clocks.find(id);
+        if (it == clocks.end()) {
+          SpiceInt sclk = 0;
+          ckmeta_c(id, "SCLK", &sclk);
+          checkNaifErrors();
+          it = clocks.emplace(id, sclk).first;
+        }
+        return it->second;
+      };
+      auto toEt = [](SpiceInt sclk, double ticks) {
+        double et;
+        sct2e_c(sclk, ticks, &et);
+        return et;
+      };
+
+      bool first = true;
+      for (const daf::Summary &s : read.segments) {
+        const int id = s.ic[0];
+        double segStart = s.dc[0], segStop = s.dc[1];
+        double boundStart = s.dc[0], boundStop = s.dc[1];
+
+        if (read.isCk) {
+          SpiceInt sclk = clockFor(id);
+          segStart = toEt(sclk, s.dc[0]);
+          segStop = toEt(sclk, s.dc[1]);
+
+          // The bounds keep getKernelStartStopTimes' id / 1000 clock
+          SpiceInt boundSclk = id / 1000;
+          if (boundSclk == sclk) {
+            boundStart = segStart;
+            boundStop = segStop;
+          }
+          else {
+            boundStart = toEt(boundSclk, s.dc[0]);
+            boundStop = toEt(boundSclk, s.dc[1]);
+          }
+          checkNaifErrors();
+        }
+
+        if (first) {
+          coverage.start_time = boundStart;
+          coverage.stop_time = boundStop;
+          first = false;
+        }
+        else {
+          coverage.start_time = min(coverage.start_time, boundStart);
+          coverage.stop_time = max(coverage.stop_time, boundStop);
+        }
+
+        coverage.segment_starts.push_back(segStart);
+        coverage.segment_stops.push_back(segStop);
+        coverage.segment_body_codes.push_back(id);
+      }
+
+      // Windows were merged in ticks; SCLK to ET is monotonic, so converting
+      // the merged endpoints gives ckcov_c's window, merged once more in case
+      // two endpoints meet in ET.
+      for (auto &[id, w] : read.intervals) {
+        if (read.isCk) {
+          SpiceInt sclk = clockFor(id);
+          for (auto &iv : w) {
+            iv.first = toEt(sclk, iv.first);
+            iv.second = toEt(sclk, iv.second);
+          }
+          checkNaifErrors();
+          w = daf::merge(std::move(w));
+        }
+        for (auto &[begin, end] : w) {
+          coverage.interval_starts.push_back(begin);
+          coverage.interval_stops.push_back(end);
+          coverage.interval_body_codes.push_back(id);
+        }
+      }
+
+      sortCoverageRows(coverage);
+      result.ok = true;
+    }
+    catch (exception &e) {
+      result.error = e.what();
+    }
+    return result;
+  }
+
+
+  /**
+   * @brief Read the coverage of many kernels with the DAF reader.
+   *
+   * The files are read on a pool of
+   * threads, which is safe because daf_reader.h doesn't touch CSPICE. The CK
+   * tick to ET conversion does need CSPICE and the furnished SCLKs, so it runs
+   * afterwards in this thread. It only converts segment bounds and merged
+   * window endpoints, so it's a small part of the time.
+   **/
+  static vector<CoverageResult> collectCoverageDaf(const vector<string> &kernels) {
+    vector<DafRead> reads(kernels.size());
+
+    auto t_read = DbClock::now();
+    size_t nthreads = max<size_t>(1, min(coverageWorkerCount(), kernels.size()));
+    atomic<size_t> next{0};
+    auto work = [&] {
+      for (size_t i = next++; i < kernels.size(); i = next++) {
+        reads[i] = readDafCoverage(kernels[i]);
+      }
+    };
+    vector<thread> threads;
+    for (size_t t = 1; t < nthreads; t++) {
+      threads.emplace_back(work);
+    }
+    work();
+    for (thread &t : threads) {
+      t.join();
+    }
+    double sec_read = secondsSince(t_read);
+
+    auto t_convert = DbClock::now();
+    vector<CoverageResult> results(kernels.size());
+    for (size_t i = 0; i < kernels.size(); i++) {
+      results[i] = convertDafCoverage(reads[i]);
+    }
+    SPDLOG_DEBUG("daf coverage: {} kernels, read {:.3f}s on {} threads, convert {:.3f}s",
+                 kernels.size(), sec_read, nthreads, secondsSince(t_convert));
+    return results;
+  }
+
+
+  // Coverage already read during one create_database, by kernel path
+  using CoverageCache = unordered_map<string, CoverageResult>;
+
+
+  /**
+   * @brief Coverage of each kernel, reading only the ones not in the cache.
+   *
+   * Missions that depend on another one inherit its kernel lists (cassis gets
+   * all of tgo's CKs and SPKs), so without the cache those kernels are read
+   * once per mission. A cached kernel's times were converted with whichever
+   * mission's SCLKs were furnished when it was first read, which is the same
+   * spacecraft clock, since the missions share the kernel.
+   **/
+  static vector<CoverageResult> collectCoverage(const vector<string> &kernels, CoverageCache &cache) {
+    vector<string> unread;
+    unordered_set<string> queued;
+    for (const string &kernel : kernels) {
+      if (!cache.count(kernel) && queued.insert(kernel).second) {
+        unread.push_back(kernel);
+      }
+    }
+    SPDLOG_DEBUG("coverage: {} kernels, {} already read", kernels.size(), kernels.size() - unread.size());
+
+    if (!unread.empty()) {
+      vector<CoverageResult> read = collectCoverageDaf(unread);
+      for (size_t i = 0; i < unread.size(); i++) {
+        cache.emplace(unread[i], std::move(read[i]));
+      }
+    }
+
+    vector<CoverageResult> results;
+    results.reserve(kernels.size());
+    for (const string &kernel : kernels) {
+      results.push_back(cache.at(kernel));
+    }
+    return results;
+  }
+
+
+  void collectStartStopTimes(string mission, string type, string quality, TimeIndexedKernels *kernel_times,
+                             CoverageCache &coverage_cache) {
     SPDLOG_TRACE("In globTimeIntervals.");
     Config conf;
     conf = conf[mission];
@@ -201,68 +484,84 @@ namespace SpiceQL {
     json timeJson = conf.getRecursive(type);
     json ckKernelGrp = timeJson[type][quality]["kernels"];
 
+    vector<string> kernels;
     for(auto &arr : ckKernelGrp) {
       for(auto &subArr : arr) {
         for (auto &kernel : subArr) {
-          pair<double, double> sstimes = getKernelStartStopTimes(kernel);
-          SPDLOG_TRACE("{} times: {}, {}", std::string(kernel), sstimes.first, sstimes.second); 
-          // use start_time as index to the majority of kernels, then use stop time in the value 
-          // to get the final list
-          size_t index = 0;
-          
-          index = kernel_times->file_paths.size(); 
-
-          // cant contruct these in line for whatever reason 
-          fc::BTreePair<double, size_t> p;
-          p.first = sstimes.first; 
-          p.second = index;
-          while(kernel_times->start_times.contains(p.first)) { 
-            p.first-=0.001; 
-          } 
-          kernel_times->start_times.insert(p);
-
-          fc::BTreePair<double, size_t> p2;
-          p2.first = sstimes.second; 
-          p2.second = index; 
-
-          while(kernel_times->stop_times.contains(p2.first)) { 
-            p2.first+=0.001; 
-          }  
-          kernel_times->stop_times.insert(p2);
-
-          // Intervals and segments are extra data next to the bounds above, so
-          // a kernel they can't be read for keeps its bounds and gets no rows.
-          try {
-            KernelCoverage coverage = getKernelCoverage(kernel);
-
-            kernel_times->interval_starts.insert(kernel_times->interval_starts.end(),
-                coverage.interval_starts.begin(), coverage.interval_starts.end());
-            kernel_times->interval_stops.insert(kernel_times->interval_stops.end(),
-                coverage.interval_stops.begin(), coverage.interval_stops.end());
-            kernel_times->interval_body_codes.insert(kernel_times->interval_body_codes.end(),
-                coverage.interval_body_codes.begin(), coverage.interval_body_codes.end());
-            kernel_times->interval_kindex.insert(kernel_times->interval_kindex.end(),
-                coverage.interval_starts.size(), index);
-
-            kernel_times->segment_starts.insert(kernel_times->segment_starts.end(),
-                coverage.segment_starts.begin(), coverage.segment_starts.end());
-            kernel_times->segment_stops.insert(kernel_times->segment_stops.end(),
-                coverage.segment_stops.begin(), coverage.segment_stops.end());
-            kernel_times->segment_body_codes.insert(kernel_times->segment_body_codes.end(),
-                coverage.segment_body_codes.begin(), coverage.segment_body_codes.end());
-            kernel_times->segment_kindex.insert(kernel_times->segment_kindex.end(),
-                coverage.segment_starts.size(), index);
-          }
-          catch (exception &e) {
-            SPDLOG_WARN("Could not collect intervals and segments for {}: {}", std::string(kernel), e.what());
-          }
-
-          // get relative path to make db portable 
-          fs::path relative_path_kernel = fs::relative(kernel, fs::absolute(getDataDirectory()));
-          SPDLOG_TRACE("Relative Kernel: {}", relative_path_kernel.generic_string()); 
-          kernel_times->file_paths.push_back(relative_path_kernel.string());
+          kernels.push_back(kernel);
         }
       }
+    }
+
+    // One read of each kernel gives its bounds, intervals and segments, and
+    // the reads run in parallel. The index below is built serially, in kernel
+    // order, so kernel indices don't depend on the workers.
+    vector<CoverageResult> coverages = collectCoverage(kernels, coverage_cache);
+
+    for (size_t k = 0; k < kernels.size(); k++) {
+      const string &kernel = kernels[k];
+      // Intervals and segments are extra data next to the bounds, so if
+      // they can't be read the kernel falls back to the bounds-only read
+      // and gets no rows.
+      KernelCoverage &coverage = coverages[k].coverage;
+      bool has_coverage = coverages[k].ok;
+      pair<double, double> sstimes;
+      if (has_coverage) {
+        sstimes = {coverage.start_time, coverage.stop_time};
+      }
+      else {
+        SPDLOG_WARN("Could not collect intervals and segments for {}: {}", kernel, coverages[k].error);
+        sstimes = getKernelStartStopTimes(kernel);
+      }
+      SPDLOG_TRACE("{} times: {}, {}", std::string(kernel), sstimes.first, sstimes.second); 
+      // use start_time as index to the majority of kernels, then use stop time in the value 
+      // to get the final list
+      size_t index = 0;
+      
+      index = kernel_times->file_paths.size(); 
+
+      // cant contruct these in line for whatever reason 
+      fc::BTreePair<double, size_t> p;
+      p.first = sstimes.first; 
+      p.second = index;
+      while(kernel_times->start_times.contains(p.first)) { 
+        p.first-=0.001; 
+      } 
+      kernel_times->start_times.insert(p);
+
+      fc::BTreePair<double, size_t> p2;
+      p2.first = sstimes.second; 
+      p2.second = index; 
+
+      while(kernel_times->stop_times.contains(p2.first)) { 
+        p2.first+=0.001; 
+      }  
+      kernel_times->stop_times.insert(p2);
+
+      if (has_coverage) {
+        kernel_times->interval_starts.insert(kernel_times->interval_starts.end(),
+            coverage.interval_starts.begin(), coverage.interval_starts.end());
+        kernel_times->interval_stops.insert(kernel_times->interval_stops.end(),
+            coverage.interval_stops.begin(), coverage.interval_stops.end());
+        kernel_times->interval_body_codes.insert(kernel_times->interval_body_codes.end(),
+            coverage.interval_body_codes.begin(), coverage.interval_body_codes.end());
+        kernel_times->interval_kindex.insert(kernel_times->interval_kindex.end(),
+            coverage.interval_starts.size(), index);
+
+        kernel_times->segment_starts.insert(kernel_times->segment_starts.end(),
+            coverage.segment_starts.begin(), coverage.segment_starts.end());
+        kernel_times->segment_stops.insert(kernel_times->segment_stops.end(),
+            coverage.segment_stops.begin(), coverage.segment_stops.end());
+        kernel_times->segment_body_codes.insert(kernel_times->segment_body_codes.end(),
+            coverage.segment_body_codes.begin(), coverage.segment_body_codes.end());
+        kernel_times->segment_kindex.insert(kernel_times->segment_kindex.end(),
+            coverage.segment_starts.size(), index);
+      }
+
+      // get relative path to make db portable 
+      fs::path relative_path_kernel = fs::relative(kernel, fs::absolute(getDataDirectory()));
+      SPDLOG_TRACE("Relative Kernel: {}", relative_path_kernel.generic_string()); 
+      kernel_times->file_paths.push_back(relative_path_kernel.string());
     }
   }
 
@@ -439,6 +738,7 @@ namespace SpiceQL {
 
       double sec_sclk = 0, sec_kernel_reads = 0, sec_text = 0;
       size_t n_kernels_read = 0, n_missions = 0;
+      CoverageCache coverage_cache;
 
       t_phase = DbClock::now();
       for (auto &[mission, kernels] : json_kernels.items()) {
@@ -466,7 +766,7 @@ namespace SpiceQL {
                 TimeIndexedKernels *tkernels = new TimeIndexedKernels();
                 // btrees cannot be copied, so use pointers
                 auto t_read = DbClock::now();
-                collectStartStopTimes(mission, kernel_type, quality, tkernels); 
+                collectStartStopTimes(mission, kernel_type, quality, tkernels, coverage_cache); 
                 sec_kernel_reads += secondsSince(t_read);
                 // file_paths has one entry per kernel actually read
                 n_kernels_read += tkernels->file_paths.size();
@@ -498,12 +798,12 @@ namespace SpiceQL {
       }
 
       SPDLOG_INFO("create_database: {} missions took {:.2f}s "
-                  "(sclk {:.2f}s, kernel time reads {:.2f}s over {} kernels, text {:.2f}s)",
+                  "(sclk {:.2f}s, kernel time reads {:.2f}s over {} kernels, {} unique, text {:.2f}s)",
                   n_missions, secondsSince(t_phase), sec_sclk, sec_kernel_reads,
-                  n_kernels_read, sec_text);
-      if (n_kernels_read) {
-        SPDLOG_INFO("create_database: {:.1f} ms per kernel time read",
-                    sec_kernel_reads * 1000.0 / n_kernels_read);
+                  n_kernels_read, coverage_cache.size(), sec_text);
+      if (!coverage_cache.empty()) {
+        SPDLOG_INFO("create_database: {:.1f} ms per unique kernel time read",
+                    sec_kernel_reads * 1000.0 / coverage_cache.size());
       }
 
       // Precompute frame caches (frame list + bidirectional code<->name map)

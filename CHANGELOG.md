@@ -34,6 +34,9 @@ release.
 -->
 ### Unreleased
 
+### Added
+- Added intervals and segments to spiceqldb.hdf [#165](https://github.com/DOI-USGS/SpiceQL/pull/165)
+
 ## 1.8.0 - 2026-10-01
 
 ### Added
