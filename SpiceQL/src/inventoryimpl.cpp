@@ -206,11 +206,8 @@ namespace SpiceQL {
   };
 
 
-  // Number of threads for reading coverage, from $SPICEQL_DB_WORKERS, or 16.
-  // The reads spend nearly all their time waiting on the disk, not the CPU,
-  // so the number of cores doesn't matter; what does is how many reads the
-  // drive serves best at once. Building base, tgo and cassis from a USB SSD
-  // took 57s to read at 12 threads, 54s at 16, 62s at 24 and 64s at 64.
+  // Number of threads for reading coverage, default is 16. 
+  // Can set with environment variable $SPICEQL_DB_WORKERS.
   static size_t coverageWorkerCount() {
     const char *env = getenv("SPICEQL_DB_WORKERS");
     if (env && *env) {
@@ -221,7 +218,7 @@ namespace SpiceQL {
   }
 
 
-  // One segment's ID and bounds, with CK times still in encoded SCLK
+  // Segment summary of body/instrument ID and bounds
   struct DafSegment {
     int id;
     double start;
@@ -229,8 +226,11 @@ namespace SpiceQL {
   };
 
 
-  // What the DAF reader gets from one kernel without CSPICE: the segments and
-  // per-ID windows of negative IDs, with CK times still in encoded SCLK.
+  // Expected properties from reading a kernel using DAF reader.
+  // ok/error: checks whether the read worked, error message if not
+  // isCK: whether kernel is a CK or an SPK
+  // segments: a vector of DafSegments
+  // intervals: A map of each ID to the merged coverage window
   struct DafRead {
     bool ok = false;
     string error;
@@ -254,9 +254,7 @@ namespace SpiceQL {
       }
 
       daf::File f(resolved);
-      // Files from before the "DAF/CK" and "DAF/SPK" ID words only say
-      // "NAIF/DAF". CSPICE tells those apart by their contents; the config
-      // already knows which they are.
+      // Files from before the "DAF/CK" and "DAF/SPK" ID words only say "NAIF/DAF".
       const string kind = f.kind().empty() ? toUpper(type) : f.kind();
       if (kind != "CK" && kind != "SPK") {
         throw invalid_argument("Kernel [" + kernel + "] is a " + kind + ", which has no coverage to collect");
@@ -267,16 +265,10 @@ namespace SpiceQL {
       }
       read.isCk = kind == "CK";
 
-      // getKernelCoverage's ckcov_c window holds 200,000 doubles, the most
-      // kerneldbgen allows, so a kernel with more intervals than that for an
-      // ID fails there and keeps only its bounds. Fail the same way, so both
-      // readers put the same kernels in the database. The window is checked
-      // after each segment, so like ckcov_c this stops reading a kernel as
-      // soon as it overflows.
-      const size_t maxIntervals = 200000 / 2;
+      // Maximum interval limit per kernel, in parity with getKernelCoverage
+      const size_t maxIntervals = 100000;
 
-      // Only negative IDs (spacecraft and instruments), as getKernelCoverage
-      // does, so a segment of another body is never read
+      // Verify negative IDs for spacecraft and instruments 
       for (const daf::Summary &s : f.summaries()) {
         if (s.ic[0] >= 0) continue;
         const int id = s.ic[0];
@@ -289,8 +281,7 @@ namespace SpiceQL {
         else {
           w.emplace_back(s.dc[0], s.dc[1]);
         }
-        // Merging only shrinks a window, so it's only needed here once the
-        // unmerged one is too big
+        // Merge list of time ranges if over max intervals limit
         if (w.size() > maxIntervals) {
           w = daf::merge(std::move(w));
           if (w.size() > maxIntervals) {
@@ -326,9 +317,7 @@ namespace SpiceQL {
     try {
       KernelCoverage &coverage = result.coverage;
 
-      // ckmeta_c resolves the SCLK the same way ckcov_c does, honoring a
-      // CK_<id>_SCLK assignment before falling back to id / 1000. It's a
-      // kernel pool lookup, so look each ID up once.
+      // Get ID code of spacecraft clock
       map<int, SpiceInt> clocks;
       auto clockFor = [&](int id) {
         auto it = clocks.find(id);
@@ -384,9 +373,8 @@ namespace SpiceQL {
         coverage.segment_body_codes.push_back(s.id);
       }
 
-      // Windows were merged in ticks; SCLK to ET is monotonic, so converting
-      // the merged endpoints gives ckcov_c's window, merged once more in case
-      // two endpoints meet in ET.
+      // Convert only endpoint ticks to ET since we only care about
+      // the range of the window coverage
       for (const auto &[id, ticks] : read.intervals) {
         daf::Window w = ticks;
         if (read.isCk) {
@@ -415,7 +403,7 @@ namespace SpiceQL {
   }
 
 
-  // Raw DAF reads of kernels, by kernel path
+  // Raw DAF reads of kernels by kernel path
   using CoverageCache = unordered_map<string, DafRead>;
 
 
@@ -423,8 +411,8 @@ namespace SpiceQL {
    * @brief Reads the kernels that aren't in the cache yet, on a pool of threads.
    *
    * Safe because daf_reader.h doesn't touch CSPICE. Missions that depend on
-   * another one inherit its kernel lists (cassis gets all of tgo's CKs and
-   * SPKs), so each kernel is read once however many lists it's in.
+   * another one inherit its kernel lists, so each kernel is read once however 
+   * many lists it's in.
    *
    * @param kernels Kernel paths, each with its type in the config ("ck" or "spk")
    **/
@@ -489,9 +477,7 @@ namespace SpiceQL {
     SPDLOG_TRACE("In globTimeIntervals.");
     vector<string> kernels = timeKernels(mission, type, quality);
 
-    // create_database reads every kernel up front, so this normally only
-    // converts. The index below is built serially, in kernel order, so kernel
-    // indices don't depend on the workers.
+    // Use threading to read all the kernels to get their coverage                          
     vector<pair<string, string>> typed;
     for (const string &kernel : kernels) {
       typed.emplace_back(kernel, type);
@@ -506,9 +492,9 @@ namespace SpiceQL {
 
     for (size_t k = 0; k < kernels.size(); k++) {
       const string &kernel = kernels[k];
-      // Intervals and segments are extra data next to the bounds, so if
-      // they can't be read the kernel falls back to the bounds-only read
-      // and gets no rows.
+      
+      // Fall back to kernel start and stop times if interval and segment data
+      // could not be collected
       KernelCoverage &coverage = coverages[k].coverage;
       bool has_coverage = coverages[k].ok;
       pair<double, double> sstimes;
@@ -746,10 +732,8 @@ namespace SpiceQL {
       size_t n_kernels_read = 0, n_missions = 0;
       CoverageCache coverage_cache;
 
-      // Read every CK and SPK first, in one pass on the thread pool. Only the
-      // conversion to ET needs a mission's SCLKs, not the reads, and one pass
-      // keeps every thread busy instead of draining the pool at the end of
-      // each kernel list.
+      // Read all the CKs and SPKs first then loop through each mission's SCLK 
+      // files to convert CK times into ET
       t_phase = DbClock::now();
       {
         vector<pair<string, string>> time_kernels;
