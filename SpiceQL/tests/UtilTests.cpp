@@ -678,14 +678,6 @@ TEST_F(TempTestingFiles, UnitTestGetKernelCoverage) {
   EXPECT_EQ(coverage.interval_stops, expectedIntervalStops);
   EXPECT_EQ(coverage.interval_body_codes, expectedIntervalCodes);
 
-  // Segments stay unmerged and come back sorted by start.
-  std::vector<double> expectedSegmentStarts = {100, 150, 400};
-  std::vector<double> expectedSegmentStops = {200, 250, 500};
-  std::vector<int> expectedSegmentCodes = {-85, -85, -85};
-  EXPECT_EQ(coverage.segment_starts, expectedSegmentStarts);
-  EXPECT_EQ(coverage.segment_stops, expectedSegmentStops);
-  EXPECT_EQ(coverage.segment_body_codes, expectedSegmentCodes);
-
   // The bounds come from the same read and match the bounds-only read.
   std::pair<double, double> bounds = getKernelStartStopTimes(spkPath);
   EXPECT_EQ(coverage.start_time, bounds.first);
@@ -722,11 +714,6 @@ TEST_F(LroKernelSet, UnitTestGetKernelCoverageCkGap) {
   EXPECT_NEAR(coverage.interval_starts[1], 118000000, 1e-3);
   EXPECT_NEAR(coverage.interval_stops[1], 120000000, 1e-3);
   EXPECT_EQ(coverage.interval_body_codes, std::vector<int>({-85000, -85000}));
-
-  ASSERT_EQ(coverage.segment_starts.size(), 1);
-  EXPECT_NEAR(coverage.segment_starts[0], 110000000, 1e-3);
-  EXPECT_NEAR(coverage.segment_stops[0], 120000000, 1e-3);
-  EXPECT_EQ(coverage.segment_body_codes, std::vector<int>({-85000}));
 
   std::pair<double, double> bounds = getKernelStartStopTimes(ckPath);
   EXPECT_EQ(coverage.start_time, bounds.first);

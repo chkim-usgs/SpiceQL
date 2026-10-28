@@ -949,8 +949,8 @@ namespace SpiceQL {
 
 
   void sortCoverageRows(KernelCoverage &coverage) {
-    // Sort each row set by start, then stop, then body code, keeping the
-    // columns of a row together.
+    // Sort rows by start, then stop, then body code, keeping the columns of a
+    // row together.
     auto sortRows = [](vector<double> &starts, vector<double> &stops, vector<int> &codes) {
       vector<size_t> order(starts.size());
       for (size_t i = 0; i < order.size(); i++) order[i] = i;
@@ -974,7 +974,6 @@ namespace SpiceQL {
     };
 
     sortRows(coverage.interval_starts, coverage.interval_stops, coverage.interval_body_codes);
-    sortRows(coverage.segment_starts, coverage.segment_stops, coverage.segment_body_codes);
   }
 
 
@@ -999,8 +998,8 @@ namespace SpiceQL {
 
     KernelCoverage coverage;
 
-    // Everything comes from one open of the file: the bounds, the segments and,
-    // for SPKs, the intervals. Only CK intervals need NAIF's ckcov_c, which
+    // Everything comes from one open of the file: the bounds and, for SPKs,
+    // the intervals. Only CK intervals need NAIF's ckcov_c, which
     // reuses this handle rather than reopening the file.
     SpiceInt handle = 0;
     dafopr_c(resolved.c_str(), &handle);
@@ -1019,8 +1018,6 @@ namespace SpiceQL {
       SpiceDouble dc[128];
       SpiceInt ic[128];
 
-      // ckmeta_c does a kernel pool lookup, so look each ID up once
-      map<int, SpiceInt> sclkIds;
       bool first = true;
 
       dafbfs_c(handle);
@@ -1036,35 +1033,14 @@ namespace SpiceQL {
         checkNaifErrors();
 
         if (ic[0] < 0) {
-          double segStart = dc[0];
-          double segStop  = dc[1];
           double boundStart = dc[0];
           double boundStop  = dc[1];
 
           if (type == "CK") {
-            // ckmeta_c resolves the SCLK the same way ckcov_c does, honoring a
-            // CK_<id>_SCLK assignment before falling back to id / 1000.
-            auto it = sclkIds.find(ic[0]);
-            if (it == sclkIds.end()) {
-              SpiceInt sclk = 0;
-              ckmeta_c(ic[0], "SCLK", &sclk);
-              checkNaifErrors();
-              it = sclkIds.emplace(ic[0], sclk).first;
-            }
-            sct2e_c(it->second, dc[0], &segStart);
-            sct2e_c(it->second, dc[1], &segStop);
-
             // The bounds keep getKernelStartStopTimes' id / 1000 clock, so the
             // existing start and stop times don't change.
-            SpiceInt boundSclk = ic[0] / 1000;
-            if (boundSclk == it->second) {
-              boundStart = segStart;
-              boundStop = segStop;
-            }
-            else {
-              sct2e_c(boundSclk, dc[0], &boundStart);
-              sct2e_c(boundSclk, dc[1], &boundStop);
-            }
+            sct2e_c(ic[0] / 1000, dc[0], &boundStart);
+            sct2e_c(ic[0] / 1000, dc[1], &boundStop);
             checkNaifErrors();
           }
 
@@ -1077,10 +1053,6 @@ namespace SpiceQL {
             coverage.start_time = min(coverage.start_time, boundStart);
             coverage.stop_time = max(coverage.stop_time, boundStop);
           }
-
-          coverage.segment_starts.push_back(segStart);
-          coverage.segment_stops.push_back(segStop);
-          coverage.segment_body_codes.push_back((int)ic[0]);
 
           if (type == "SPK") {
             idSegments[ic[0]].emplace_back(dc[0], dc[1]);

@@ -146,11 +146,11 @@ namespace SpiceQL {
 
 
   /**
-    * @brief Coverage of one CK or SPK, as interval and segment rows.
+    * @brief Coverage of one CK or SPK, as interval rows.
     *
-    * Each set of vectors is row-aligned: row i of interval_starts,
-    * interval_stops and interval_body_codes describes one interval, and the
-    * same holds for the segment vectors. Rows are sorted by start time.
+    * The vectors are row-aligned: row i of interval_starts, interval_stops
+    * and interval_body_codes describes one interval. Rows are sorted by start
+    * time.
     * start_time and stop_time are the kernel's bounds, the same values
     * getKernelStartStopTimes returns.
     **/
@@ -161,21 +161,17 @@ namespace SpiceQL {
     std::vector<double> interval_starts;
     std::vector<double> interval_stops;
     std::vector<int> interval_body_codes;
-
-    std::vector<double> segment_starts;
-    std::vector<double> segment_stops;
-    std::vector<int> segment_body_codes;
   };
 
 
   /**
-    * @brief Get the coverage intervals and segments of a kernel.
+    * @brief Get the coverage intervals of a kernel.
     *
     * Intervals come from spkcov_c / ckcov_c, one coverage window per NAIF ID,
     * the way ISIS's kerneldbgen gets them. CK coverage is taken at the
-    * INTERVAL level, so gaps inside a segment show up. Segments are the raw DAF
-    * descriptor bounds. Only negative IDs (spacecraft and instruments) are
-    * included, matching getKernelStartStopTimes. All times are ET.
+    * INTERVAL level, so gaps inside a segment show up. Only negative IDs
+    * (spacecraft and instruments) are included, matching
+    * getKernelStartStopTimes. All times are ET.
     *
     * The file is opened once and its segments walked once; the bounds come
     * from the same walk, so callers don't need getKernelStartStopTimes too.
@@ -184,13 +180,13 @@ namespace SpiceQL {
     * furnished.
     *
     * @param kpath Path to the kernel
-    * @returns the kernel's intervals and segments
+    * @returns the kernel's intervals
     **/
   KernelCoverage getKernelCoverage(std::string kpath);
 
 
   /**
-    * @brief Sort a coverage's interval and segment rows by start, then stop,
+    * @brief Sort a coverage's interval rows by start, then stop,
     *        then body code, keeping each row's columns together.
     *
     * @param coverage The coverage to sort in place

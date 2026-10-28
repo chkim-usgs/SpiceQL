@@ -304,7 +304,7 @@ TEST_F(LroKernelSet, InferMissionInitCache) {
 }
 
 
-TEST_F(LroKernelSet, TestInventoryIntervalsAndSegments) {
+TEST_F(LroKernelSet, TestInventoryIntervals) {
   fs::path dbfile = Inventory::getDbFilePath();
   HighFive::File file(dbfile, HighFive::File::ReadOnly);
 
@@ -320,27 +320,27 @@ TEST_F(LroKernelSet, TestInventoryIntervalsAndSegments) {
     {"lrolc_1111111_1111111_v11.bc", {130000000, 140000000}}
   };
 
-  for (std::string prefix : {"intervals_", "segments_"}) {
-    std::string codes_key = (prefix == "intervals_") ? "interval_body_code" : "segment_body_code";
-    auto starts = file.getDataSet(group + prefix + "start").read<std::vector<double>>();
-    auto stops = file.getDataSet(group + prefix + "stop").read<std::vector<double>>();
-    auto start_kindex = file.getDataSet(group + prefix + "start_kindex").read<std::vector<size_t>>();
-    auto stop_kindex = file.getDataSet(group + prefix + "stop_kindex").read<std::vector<size_t>>();
-    auto codes = file.getDataSet(group + codes_key).read<std::vector<int>>();
+  auto starts = file.getDataSet(group + "intervals_start").read<std::vector<double>>();
+  auto stops = file.getDataSet(group + "intervals_stop").read<std::vector<double>>();
+  auto start_kindex = file.getDataSet(group + "intervals_start_kindex").read<std::vector<size_t>>();
+  auto stop_kindex = file.getDataSet(group + "intervals_stop_kindex").read<std::vector<size_t>>();
+  auto codes = file.getDataSet(group + "interval_body_code").read<std::vector<int>>();
 
-    ASSERT_EQ(starts.size(), 2) << prefix;
-    ASSERT_EQ(stops.size(), 2) << prefix;
-    ASSERT_EQ(codes.size(), 2) << prefix;
-    EXPECT_EQ(start_kindex, stop_kindex) << prefix;
+  ASSERT_EQ(starts.size(), 2);
+  ASSERT_EQ(stops.size(), 2);
+  ASSERT_EQ(codes.size(), 2);
+  EXPECT_EQ(start_kindex, stop_kindex);
 
-    for (size_t i = 0; i < starts.size(); i++) {
-      // rows are grouped by kernel in path_index order
-      EXPECT_EQ(start_kindex[i], i) << prefix;
-      std::string name = fs::path(paths.at(start_kindex[i])).filename().string();
-      ASSERT_TRUE(expected.count(name)) << name;
-      EXPECT_NEAR(starts[i], expected[name].first, 1e-3) << prefix << name;
-      EXPECT_NEAR(stops[i], expected[name].second, 1e-3) << prefix << name;
-      EXPECT_EQ(codes[i], -85000) << prefix << name;
-    }
+  for (size_t i = 0; i < starts.size(); i++) {
+    // rows are grouped by kernel in path_index order
+    EXPECT_EQ(start_kindex[i], i);
+    std::string name = fs::path(paths.at(start_kindex[i])).filename().string();
+    ASSERT_TRUE(expected.count(name)) << name;
+    EXPECT_NEAR(starts[i], expected[name].first, 1e-3) << name;
+    EXPECT_NEAR(stops[i], expected[name].second, 1e-3) << name;
+    EXPECT_EQ(codes[i], -85000) << name;
   }
+
+  // Segments aren't stored
+  EXPECT_FALSE(file.exist(group + "segments_start"));
 }

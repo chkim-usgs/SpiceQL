@@ -72,11 +72,6 @@ namespace SpiceQL {
   string DB_INTERVAL_START_INDICES_KEY = "intervals_start_kindex";
   string DB_INTERVAL_STOP_INDICES_KEY = "intervals_stop_kindex";
   string DB_INTERVAL_BODY_CODES_KEY = "interval_body_code";
-  string DB_SEGMENT_START_KEY = "segments_start";
-  string DB_SEGMENT_STOP_KEY = "segments_stop";
-  string DB_SEGMENT_START_INDICES_KEY = "segments_start_kindex";
-  string DB_SEGMENT_STOP_INDICES_KEY = "segments_stop_kindex";
-  string DB_SEGMENT_BODY_CODES_KEY = "segment_body_code";
   string DB_FRAME_CACHE_KEY = "spql_cache";
   string DB_FRAME_LIST_KEY = "spql_cache/frame_list";
   string DB_FRAME_CODES_KEY = "spql_cache/frame_codes";
@@ -218,24 +213,16 @@ namespace SpiceQL {
   }
 
 
-  // Segment summary of body/instrument ID and bounds
-  struct DafSegment {
-    int id;
-    double start;
-    double stop;
-  };
-
-
   // Expected properties from reading a kernel using DAF reader.
   // ok/error: checks whether the read worked, error message if not
   // isCK: whether kernel is a CK or an SPK
-  // segments: a vector of DafSegments
+  // bounds: A map of each ID to its earliest start and latest stop
   // intervals: A map of each ID to the merged coverage window
   struct DafRead {
     bool ok = false;
     string error;
     bool isCk = false;
-    vector<DafSegment> segments;
+    map<int, pair<double, double>> bounds;
     map<int, daf::Window> intervals;
   };
 
@@ -272,7 +259,11 @@ namespace SpiceQL {
       for (const daf::Summary &s : f.summaries()) {
         if (s.ic[0] >= 0) continue;
         const int id = s.ic[0];
-        read.segments.push_back({id, s.dc[0], s.dc[1]});
+        auto [bound, added] = read.bounds.try_emplace(id, s.dc[0], s.dc[1]);
+        if (!added) {
+          bound->second.first = min(bound->second.first, s.dc[0]);
+          bound->second.second = max(bound->second.second, s.dc[1]);
+        }
         daf::Window &w = read.intervals[id];
         if (read.isCk) {
           daf::Window seg = daf::ckSegmentCoverage(f, s);
@@ -336,25 +327,13 @@ namespace SpiceQL {
       };
 
       bool first = true;
-      for (const DafSegment &s : read.segments) {
-        double segStart = s.start, segStop = s.stop;
-        double boundStart = s.start, boundStop = s.stop;
+      for (const auto &[id, ticks] : read.bounds) {
+        double boundStart = ticks.first, boundStop = ticks.second;
 
         if (read.isCk) {
-          SpiceInt sclk = clockFor(s.id);
-          segStart = toEt(sclk, s.start);
-          segStop = toEt(sclk, s.stop);
-
           // The bounds keep getKernelStartStopTimes' id / 1000 clock
-          SpiceInt boundSclk = s.id / 1000;
-          if (boundSclk == sclk) {
-            boundStart = segStart;
-            boundStop = segStop;
-          }
-          else {
-            boundStart = toEt(boundSclk, s.start);
-            boundStop = toEt(boundSclk, s.stop);
-          }
+          boundStart = toEt(id / 1000, ticks.first);
+          boundStop = toEt(id / 1000, ticks.second);
           checkNaifErrors();
         }
 
@@ -367,10 +346,6 @@ namespace SpiceQL {
           coverage.start_time = min(coverage.start_time, boundStart);
           coverage.stop_time = max(coverage.stop_time, boundStop);
         }
-
-        coverage.segment_starts.push_back(segStart);
-        coverage.segment_stops.push_back(segStop);
-        coverage.segment_body_codes.push_back(s.id);
       }
 
       // Convert only endpoint ticks to ET since we only care about
@@ -493,8 +468,8 @@ namespace SpiceQL {
     for (size_t k = 0; k < kernels.size(); k++) {
       const string &kernel = kernels[k];
       
-      // Fall back to kernel start and stop times if interval and segment data
-      // could not be collected
+      // Fall back to kernel start and stop times if interval data could not
+      // be collected
       KernelCoverage &coverage = coverages[k].coverage;
       bool has_coverage = coverages[k].ok;
       pair<double, double> sstimes;
@@ -502,7 +477,7 @@ namespace SpiceQL {
         sstimes = {coverage.start_time, coverage.stop_time};
       }
       else {
-        SPDLOG_WARN("Could not collect intervals and segments for {}: {}", kernel, coverages[k].error);
+        SPDLOG_WARN("Could not collect intervals for {}: {}", kernel, coverages[k].error);
         sstimes = getKernelStartStopTimes(kernel);
       }
       SPDLOG_TRACE("{} times: {}, {}", std::string(kernel), sstimes.first, sstimes.second); 
@@ -539,15 +514,6 @@ namespace SpiceQL {
             coverage.interval_body_codes.begin(), coverage.interval_body_codes.end());
         kernel_times->interval_kindex.insert(kernel_times->interval_kindex.end(),
             coverage.interval_starts.size(), index);
-
-        kernel_times->segment_starts.insert(kernel_times->segment_starts.end(),
-            coverage.segment_starts.begin(), coverage.segment_starts.end());
-        kernel_times->segment_stops.insert(kernel_times->segment_stops.end(),
-            coverage.segment_stops.begin(), coverage.segment_stops.end());
-        kernel_times->segment_body_codes.insert(kernel_times->segment_body_codes.end(),
-            coverage.segment_body_codes.begin(), coverage.segment_body_codes.end());
-        kernel_times->segment_kindex.insert(kernel_times->segment_kindex.end(),
-            coverage.segment_starts.size(), index);
       }
 
       // get relative path to make db portable 
@@ -1157,9 +1123,9 @@ namespace SpiceQL {
         H5Easy::dump(file, DB_SPICE_ROOT_KEY + "/"+kernel_key+"/"+DB_START_TIME_INDICES_KEY, start_indices_v, H5Easy::DumpMode::Overwrite);
         H5Easy::dump(file, DB_SPICE_ROOT_KEY + "/"+kernel_key+"/"+DB_STOP_TIME_INDICES_KEY, stop_indices_v, H5Easy::DumpMode::Overwrite);
 
-        // Intervals and segments are row-aligned rather than sorted per column
-        // like the times above: row i of every dataset in a set describes the
-        // same interval (or segment), so a start keeps its stop and body code.
+        // Intervals are row-aligned rather than sorted per column like the
+        // times above: row i of every interval dataset describes the same
+        // interval, so a start keeps its stop and body code.
         // The start and stop kindex datasets therefore hold the same values.
         string group_key = DB_SPICE_ROOT_KEY + "/" + kernel_key + "/";
         if (kernels->interval_starts.size() > 0) {
@@ -1168,13 +1134,6 @@ namespace SpiceQL {
           H5Easy::dump(file, group_key + DB_INTERVAL_START_INDICES_KEY, kernels->interval_kindex, H5Easy::DumpMode::Overwrite);
           H5Easy::dump(file, group_key + DB_INTERVAL_STOP_INDICES_KEY, kernels->interval_kindex, H5Easy::DumpMode::Overwrite);
           H5Easy::dump(file, group_key + DB_INTERVAL_BODY_CODES_KEY, kernels->interval_body_codes, H5Easy::DumpMode::Overwrite);
-        }
-        if (kernels->segment_starts.size() > 0) {
-          H5Easy::dump(file, group_key + DB_SEGMENT_START_KEY, kernels->segment_starts, H5Easy::DumpMode::Overwrite);
-          H5Easy::dump(file, group_key + DB_SEGMENT_STOP_KEY, kernels->segment_stops, H5Easy::DumpMode::Overwrite);
-          H5Easy::dump(file, group_key + DB_SEGMENT_START_INDICES_KEY, kernels->segment_kindex, H5Easy::DumpMode::Overwrite);
-          H5Easy::dump(file, group_key + DB_SEGMENT_STOP_INDICES_KEY, kernels->segment_kindex, H5Easy::DumpMode::Overwrite);
-          H5Easy::dump(file, group_key + DB_SEGMENT_BODY_CODES_KEY, kernels->segment_body_codes, H5Easy::DumpMode::Overwrite);
         }
       }
     }

@@ -39,11 +39,6 @@ namespace SpiceQL {
   extern std::string DB_INTERVAL_START_INDICES_KEY;
   extern std::string DB_INTERVAL_STOP_INDICES_KEY;
   extern std::string DB_INTERVAL_BODY_CODES_KEY;
-  extern std::string DB_SEGMENT_START_KEY;
-  extern std::string DB_SEGMENT_STOP_KEY;
-  extern std::string DB_SEGMENT_START_INDICES_KEY;
-  extern std::string DB_SEGMENT_STOP_INDICES_KEY;
-  extern std::string DB_SEGMENT_BODY_CODES_KEY;
   // Precomputed frame caches (built during create_database) so runtime
   // resolution never needs to furnish slow FKs. Stored under one group.
   extern std::string DB_FRAME_CACHE_KEY;
@@ -63,16 +58,11 @@ namespace SpiceQL {
 
     // Coverage rows, grouped by kernel in file_paths order and sorted by start
     // within a kernel. Row i of the interval_* vectors is one interval of
-    // kernel interval_kindex[i]; the segment_* vectors work the same way.
+    // kernel interval_kindex[i].
     std::vector<double> interval_starts;
     std::vector<double> interval_stops;
     std::vector<size_t> interval_kindex;
     std::vector<int> interval_body_codes;
-
-    std::vector<double> segment_starts;
-    std::vector<double> segment_stops;
-    std::vector<size_t> segment_kindex;
-    std::vector<int> segment_body_codes;
   };
 
 
