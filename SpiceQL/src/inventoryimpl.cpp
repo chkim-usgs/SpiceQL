@@ -206,17 +206,27 @@ namespace SpiceQL {
   };
 
 
-  // Number of threads for reading coverage, from $SPICEQL_DB_WORKERS or the
-  // number of cores.
+  // Number of threads for reading coverage, from $SPICEQL_DB_WORKERS, or 16.
+  // The reads spend nearly all their time waiting on the disk, not the CPU,
+  // so the number of cores doesn't matter; what does is how many reads the
+  // drive serves best at once. Building base, tgo and cassis from a USB SSD
+  // took 57s to read at 12 threads, 54s at 16, 62s at 24 and 64s at 64.
   static size_t coverageWorkerCount() {
     const char *env = getenv("SPICEQL_DB_WORKERS");
     if (env && *env) {
       long n = strtol(env, nullptr, 10);
       return n > 0 ? (size_t)n : 1;
     }
-    size_t n = thread::hardware_concurrency();
-    return n > 0 ? n : 1;
+    return 16;
   }
+
+
+  // One segment's ID and bounds, with CK times still in encoded SCLK
+  struct DafSegment {
+    int id;
+    double start;
+    double stop;
+  };
 
 
   // What the DAF reader gets from one kernel without CSPICE: the segments and
@@ -225,13 +235,17 @@ namespace SpiceQL {
     bool ok = false;
     string error;
     bool isCk = false;
-    vector<daf::Summary> segments;
+    vector<DafSegment> segments;
     map<int, daf::Window> intervals;
   };
 
 
-  // Thread safe: only daf_reader.h, no CSPICE calls.
-  static DafRead readDafCoverage(const string &kernel) {
+  /**
+   * Thread safe: only daf_reader.h, no CSPICE calls.
+   *
+   * @param type The kernel's type in the config, "ck" or "spk"
+   **/
+  static DafRead readDafCoverage(const string &kernel, const string &type) {
     DafRead read;
     try {
       string resolved = kernel;
@@ -240,10 +254,16 @@ namespace SpiceQL {
       }
 
       daf::File f(resolved);
-      const string kind = f.kind();
+      // Files from before the "DAF/CK" and "DAF/SPK" ID words only say
+      // "NAIF/DAF". CSPICE tells those apart by their contents; the config
+      // already knows which they are.
+      const string kind = f.kind().empty() ? toUpper(type) : f.kind();
       if (kind != "CK" && kind != "SPK") {
-        throw invalid_argument("Kernel [" + kernel + "] is a " + (kind.empty() ? f.idWord() : kind) +
-                               ", which has no coverage to collect");
+        throw invalid_argument("Kernel [" + kernel + "] is a " + kind + ", which has no coverage to collect");
+      }
+      if (f.nd() != 2 || f.ni() != 6) {
+        throw invalid_argument("Kernel [" + kernel + "] does not have " + kind + " summaries (ND/NI " +
+                               to_string(f.nd()) + "/" + to_string(f.ni()) + ")");
       }
       read.isCk = kind == "CK";
 
@@ -259,8 +279,8 @@ namespace SpiceQL {
       // does, so a segment of another body is never read
       for (const daf::Summary &s : f.summaries()) {
         if (s.ic[0] >= 0) continue;
-        read.segments.push_back(s);
         const int id = s.ic[0];
+        read.segments.push_back({id, s.dc[0], s.dc[1]});
         daf::Window &w = read.intervals[id];
         if (read.isCk) {
           daf::Window seg = daf::ckSegmentCoverage(f, s);
@@ -296,7 +316,7 @@ namespace SpiceQL {
    * converting CK ticks to ET. Uses CSPICE, so it runs in the calling thread
    * with the mission's SCLKs furnished.
    **/
-  static CoverageResult convertDafCoverage(DafRead &read) {
+  static CoverageResult convertDafCoverage(const DafRead &read) {
     CoverageResult result;
     if (!read.ok) {
       result.error = read.error;
@@ -327,25 +347,24 @@ namespace SpiceQL {
       };
 
       bool first = true;
-      for (const daf::Summary &s : read.segments) {
-        const int id = s.ic[0];
-        double segStart = s.dc[0], segStop = s.dc[1];
-        double boundStart = s.dc[0], boundStop = s.dc[1];
+      for (const DafSegment &s : read.segments) {
+        double segStart = s.start, segStop = s.stop;
+        double boundStart = s.start, boundStop = s.stop;
 
         if (read.isCk) {
-          SpiceInt sclk = clockFor(id);
-          segStart = toEt(sclk, s.dc[0]);
-          segStop = toEt(sclk, s.dc[1]);
+          SpiceInt sclk = clockFor(s.id);
+          segStart = toEt(sclk, s.start);
+          segStop = toEt(sclk, s.stop);
 
           // The bounds keep getKernelStartStopTimes' id / 1000 clock
-          SpiceInt boundSclk = id / 1000;
+          SpiceInt boundSclk = s.id / 1000;
           if (boundSclk == sclk) {
             boundStart = segStart;
             boundStop = segStop;
           }
           else {
-            boundStart = toEt(boundSclk, s.dc[0]);
-            boundStop = toEt(boundSclk, s.dc[1]);
+            boundStart = toEt(boundSclk, s.start);
+            boundStop = toEt(boundSclk, s.stop);
           }
           checkNaifErrors();
         }
@@ -362,13 +381,14 @@ namespace SpiceQL {
 
         coverage.segment_starts.push_back(segStart);
         coverage.segment_stops.push_back(segStop);
-        coverage.segment_body_codes.push_back(id);
+        coverage.segment_body_codes.push_back(s.id);
       }
 
       // Windows were merged in ticks; SCLK to ET is monotonic, so converting
       // the merged endpoints gives ckcov_c's window, merged once more in case
       // two endpoints meet in ET.
-      for (auto &[id, w] : read.intervals) {
+      for (const auto &[id, ticks] : read.intervals) {
+        daf::Window w = ticks;
         if (read.isCk) {
           SpiceInt sclk = clockFor(id);
           for (auto &iv : w) {
@@ -395,24 +415,36 @@ namespace SpiceQL {
   }
 
 
+  // Raw DAF reads of kernels, by kernel path
+  using CoverageCache = unordered_map<string, DafRead>;
+
+
   /**
-   * @brief Read the coverage of many kernels with the DAF reader.
+   * @brief Reads the kernels that aren't in the cache yet, on a pool of threads.
    *
-   * The files are read on a pool of
-   * threads, which is safe because daf_reader.h doesn't touch CSPICE. The CK
-   * tick to ET conversion does need CSPICE and the furnished SCLKs, so it runs
-   * afterwards in this thread. It only converts segment bounds and merged
-   * window endpoints, so it's a small part of the time.
+   * Safe because daf_reader.h doesn't touch CSPICE. Missions that depend on
+   * another one inherit its kernel lists (cassis gets all of tgo's CKs and
+   * SPKs), so each kernel is read once however many lists it's in.
+   *
+   * @param kernels Kernel paths, each with its type in the config ("ck" or "spk")
    **/
-  static vector<CoverageResult> collectCoverageDaf(const vector<string> &kernels) {
-    vector<DafRead> reads(kernels.size());
+  static void readCoverage(const vector<pair<string, string>> &kernels, CoverageCache &cache) {
+    vector<const pair<string, string> *> unread;
+    unordered_set<string> queued;
+    for (const auto &kernel : kernels) {
+      if (!cache.count(kernel.first) && queued.insert(kernel.first).second) {
+        unread.push_back(&kernel);
+      }
+    }
+    if (unread.empty()) return;
 
     auto t_read = DbClock::now();
-    size_t nthreads = max<size_t>(1, min(coverageWorkerCount(), kernels.size()));
+    vector<DafRead> reads(unread.size());
+    size_t nthreads = max<size_t>(1, min(coverageWorkerCount(), unread.size()));
     atomic<size_t> next{0};
     auto work = [&] {
-      for (size_t i = next++; i < kernels.size(); i = next++) {
-        reads[i] = readDafCoverage(kernels[i]);
+      for (size_t i = next++; i < unread.size(); i = next++) {
+        reads[i] = readDafCoverage(unread[i]->first, unread[i]->second);
       }
     };
     vector<thread> threads;
@@ -423,64 +455,20 @@ namespace SpiceQL {
     for (thread &t : threads) {
       t.join();
     }
-    double sec_read = secondsSince(t_read);
 
-    auto t_convert = DbClock::now();
-    vector<CoverageResult> results(kernels.size());
-    for (size_t i = 0; i < kernels.size(); i++) {
-      results[i] = convertDafCoverage(reads[i]);
+    for (size_t i = 0; i < unread.size(); i++) {
+      cache.emplace(unread[i]->first, std::move(reads[i]));
     }
-    SPDLOG_DEBUG("daf coverage: {} kernels, read {:.3f}s on {} threads, convert {:.3f}s",
-                 kernels.size(), sec_read, nthreads, secondsSince(t_convert));
-    return results;
+    SPDLOG_DEBUG("daf coverage: read {} of {} kernels in {:.3f}s on {} threads",
+                 unread.size(), kernels.size(), secondsSince(t_read), nthreads);
   }
 
 
-  // Coverage already read during one create_database, by kernel path
-  using CoverageCache = unordered_map<string, CoverageResult>;
-
-
-  /**
-   * @brief Coverage of each kernel, reading only the ones not in the cache.
-   *
-   * Missions that depend on another one inherit its kernel lists (cassis gets
-   * all of tgo's CKs and SPKs), so without the cache those kernels are read
-   * once per mission. A cached kernel's times were converted with whichever
-   * mission's SCLKs were furnished when it was first read, which is the same
-   * spacecraft clock, since the missions share the kernel.
-   **/
-  static vector<CoverageResult> collectCoverage(const vector<string> &kernels, CoverageCache &cache) {
-    vector<string> unread;
-    unordered_set<string> queued;
-    for (const string &kernel : kernels) {
-      if (!cache.count(kernel) && queued.insert(kernel).second) {
-        unread.push_back(kernel);
-      }
-    }
-    SPDLOG_DEBUG("coverage: {} kernels, {} already read", kernels.size(), kernels.size() - unread.size());
-
-    if (!unread.empty()) {
-      vector<CoverageResult> read = collectCoverageDaf(unread);
-      for (size_t i = 0; i < unread.size(); i++) {
-        cache.emplace(unread[i], std::move(read[i]));
-      }
-    }
-
-    vector<CoverageResult> results;
-    results.reserve(kernels.size());
-    for (const string &kernel : kernels) {
-      results.push_back(cache.at(kernel));
-    }
-    return results;
-  }
-
-
-  void collectStartStopTimes(string mission, string type, string quality, TimeIndexedKernels *kernel_times,
-                             CoverageCache &coverage_cache) {
-    SPDLOG_TRACE("In globTimeIntervals.");
+  // The kernels in one of a mission's CK or SPK lists
+  static vector<string> timeKernels(const string &mission, const string &type, const string &quality) {
     Config conf;
     conf = conf[mission];
-    
+
     json timeJson = conf.getRecursive(type);
     json ckKernelGrp = timeJson[type][quality]["kernels"];
 
@@ -492,11 +480,29 @@ namespace SpiceQL {
         }
       }
     }
+    return kernels;
+  }
 
-    // One read of each kernel gives its bounds, intervals and segments, and
-    // the reads run in parallel. The index below is built serially, in kernel
-    // order, so kernel indices don't depend on the workers.
-    vector<CoverageResult> coverages = collectCoverage(kernels, coverage_cache);
+
+  void collectStartStopTimes(string mission, string type, string quality, TimeIndexedKernels *kernel_times,
+                             CoverageCache &coverage_cache) {
+    SPDLOG_TRACE("In globTimeIntervals.");
+    vector<string> kernels = timeKernels(mission, type, quality);
+
+    // create_database reads every kernel up front, so this normally only
+    // converts. The index below is built serially, in kernel order, so kernel
+    // indices don't depend on the workers.
+    vector<pair<string, string>> typed;
+    for (const string &kernel : kernels) {
+      typed.emplace_back(kernel, type);
+    }
+    readCoverage(typed, coverage_cache);
+
+    vector<CoverageResult> coverages;
+    coverages.reserve(kernels.size());
+    for (const string &kernel : kernels) {
+      coverages.push_back(convertDafCoverage(coverage_cache.at(kernel)));
+    }
 
     for (size_t k = 0; k < kernels.size(); k++) {
       const string &kernel = kernels[k];
@@ -740,6 +746,31 @@ namespace SpiceQL {
       size_t n_kernels_read = 0, n_missions = 0;
       CoverageCache coverage_cache;
 
+      // Read every CK and SPK first, in one pass on the thread pool. Only the
+      // conversion to ET needs a mission's SCLKs, not the reads, and one pass
+      // keeps every thread busy instead of draining the pool at the end of
+      // each kernel list.
+      t_phase = DbClock::now();
+      {
+        vector<pair<string, string>> time_kernels;
+        for (auto &[mission, kernels] : json_kernels.items()) {
+          for (const string type : {"ck", "spk"}) {
+            if (!kernels.contains(type)) continue;
+            for (auto &quality : KERNEL_QUALITIES) {
+              if (!kernels[type].contains(quality)) continue;
+              for (string &kernel : timeKernels(mission, type, quality)) {
+                time_kernels.emplace_back(std::move(kernel), type);
+              }
+            }
+          }
+        }
+        readCoverage(time_kernels, coverage_cache);
+      }
+      double sec_daf_reads = secondsSince(t_phase);
+      SPDLOG_INFO("create_database: reading {} unique CKs and SPKs took {:.2f}s ({:.1f} ms each)",
+                  coverage_cache.size(), sec_daf_reads,
+                  coverage_cache.empty() ? 0.0 : sec_daf_reads * 1000.0 / coverage_cache.size());
+
       t_phase = DbClock::now();
       for (auto &[mission, kernels] : json_kernels.items()) {
         SPDLOG_TRACE("MISSION: {}", mission);
@@ -798,13 +829,9 @@ namespace SpiceQL {
       }
 
       SPDLOG_INFO("create_database: {} missions took {:.2f}s "
-                  "(sclk {:.2f}s, kernel time reads {:.2f}s over {} kernels, {} unique, text {:.2f}s)",
+                  "(sclk {:.2f}s, kernel time conversion {:.2f}s over {} kernels, text {:.2f}s)",
                   n_missions, secondsSince(t_phase), sec_sclk, sec_kernel_reads,
-                  n_kernels_read, coverage_cache.size(), sec_text);
-      if (!coverage_cache.empty()) {
-        SPDLOG_INFO("create_database: {:.1f} ms per unique kernel time read",
-                    sec_kernel_reads * 1000.0 / coverage_cache.size());
-      }
+                  n_kernels_read, sec_text);
 
       // Precompute frame caches (frame list + bidirectional code<->name map)
       // so runtime resolution never needs to furnish slow FKs.

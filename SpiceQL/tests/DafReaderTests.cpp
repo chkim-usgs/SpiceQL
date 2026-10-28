@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstring>
 #include <fstream>
+#include <map>
 #include <set>
 #include <vector>
 
@@ -45,6 +46,27 @@ namespace {
       w.emplace_back(b, e);
     }
     return w;
+  }
+
+  // Every ID's merged coverage, the way readDafCoverage builds it
+  std::map<int, daf::Window> ckCoverageTicks(const daf::File &f) {
+    std::map<int, daf::Window> cover;
+    for (const daf::Summary &s : f.summaries()) {
+      daf::Window w = daf::ckSegmentCoverage(f, s);
+      daf::Window &dst = cover[s.ic[0]];
+      dst.insert(dst.end(), w.begin(), w.end());
+    }
+    for (auto &[id, w] : cover) w = daf::merge(std::move(w));
+    return cover;
+  }
+
+  std::map<int, daf::Window> spkCoverage(const daf::File &f) {
+    std::map<int, daf::Window> cover;
+    for (const daf::Summary &s : f.summaries()) {
+      cover[s.ic[0]].emplace_back(s.dc[0], s.dc[1]);
+    }
+    for (auto &[id, w] : cover) w = daf::merge(std::move(w));
+    return cover;
   }
 
   std::vector<std::array<double, 4>> identityQuats(size_t n) {
@@ -197,7 +219,7 @@ TEST_F(TempTestingFiles, DafReaderCkTicksMatchCkcov) {
   EXPECT_EQ(f.ni(), 6);
   EXPECT_EQ(f.summaries().size(), 5);
 
-  std::map<int, daf::Window> cover = daf::ckCoverageTicks(f);
+  std::map<int, daf::Window> cover = ckCoverageTicks(f);
   ASSERT_EQ(cover.size(), 4);
   for (int id : {-85001, -85002, -85003, -85005}) {
     SCOPED_TRACE(id);
@@ -221,14 +243,73 @@ TEST_F(TempTestingFiles, DafReaderBigEndian) {
 
   daf::File little(ckPath);
   daf::File big(bigPath);
-  std::map<int, daf::Window> expected = daf::ckCoverageTicks(little);
-  EXPECT_EQ(daf::ckCoverageTicks(big), expected);
+  std::map<int, daf::Window> expected = ckCoverageTicks(little);
+  EXPECT_EQ(ckCoverageTicks(big), expected);
 
   // CSPICE reads big endian files too, which checks the copy itself
   for (auto &[id, w] : expected) {
     SCOPED_TRACE(id);
     EXPECT_EQ(cspiceCkCoverage(bigPath, id, "SCLK"), w);
   }
+}
+
+
+TEST_F(TempTestingFiles, DafReaderNaifDafIdWord) {
+  // Kernels from before the "DAF/CK" ID word say only "NAIF/DAF"
+  std::string ckPath = (tempDir / "mixed.bc").string();
+  std::string oldPath = (tempDir / "mixed_old.bc").string();
+  writeMixedCk(ckPath);
+  {
+    std::ifstream in(ckPath, std::ios::binary);
+    std::vector<char> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    std::memcpy(bytes.data(), "NAIF/DAF", 8);
+    std::ofstream out(oldPath, std::ios::binary);
+    out.write(bytes.data(), bytes.size());
+  }
+
+  daf::File f(oldPath);
+  EXPECT_EQ(f.kind(), "");
+  std::map<int, daf::Window> cover = ckCoverageTicks(f);
+  EXPECT_EQ(cover, ckCoverageTicks(daf::File(ckPath)));
+  for (auto &[id, w] : cover) {
+    SCOPED_TRACE(id);
+    EXPECT_EQ(cspiceCkCoverage(oldPath, id, "SCLK"), w);
+  }
+}
+
+
+TEST_F(TempTestingFiles, DafReaderLongType3MatchesCkcov) {
+  // Enough records and intervals of uneven lengths that finding each
+  // interval's last epoch reads ahead through the file and wraps around the
+  // record cache. The epochs jump every 1000 records.
+  std::vector<double> ticks;
+  double t = 10000;
+  for (int i = 0; i < 20000; i++) {
+    ticks.push_back(t);
+    t += (i % 1000 == 999) ? 500 : 3;
+  }
+  std::vector<double> starts = {ticks[0]};
+  for (size_t i = 1, k = 0; ; k++) {
+    i += 1 + (k * 37) % 97;
+    if (i >= ticks.size()) break;
+    starts.push_back(ticks[i]);
+  }
+  ASSERT_GT(starts.size(), 300);
+
+  std::string ckPath = (tempDir / "long3.bc").string();
+  auto q = identityQuats(ticks.size());
+  SpiceInt handle;
+  ckopn_c(ckPath.c_str(), "daf reader test", 0, &handle);
+  ckw03_c(handle, ticks.front(), ticks.back(), -85003, "J2000", SPICEFALSE, "LONG",
+          ticks.size(), ticks.data(), (SpiceDouble (*)[4])q.data(), NULL,
+          starts.size(), starts.data());
+  ckcls_c(handle);
+  checkNaifErrors();
+
+  daf::File f(ckPath);
+  daf::Window cover = ckCoverageTicks(f)[-85003];
+  EXPECT_EQ(cover, cspiceCkCoverage(ckPath, -85003, "SCLK"));
+  EXPECT_GT(cover.size(), 300);
 }
 
 
@@ -252,7 +333,7 @@ TEST_F(TempTestingFiles, DafReaderSpkMatchesSpkcov) {
 
   daf::File f(spkPath);
   EXPECT_EQ(f.kind(), "SPK");
-  std::map<int, daf::Window> cover = daf::spkCoverage(f);
+  std::map<int, daf::Window> cover = spkCoverage(f);
   ASSERT_EQ(cover.size(), 2);
   EXPECT_EQ(cover[-85], cspiceSpkCoverage(spkPath, -85));
   EXPECT_EQ(cover[301], cspiceSpkCoverage(spkPath, 301));
@@ -283,14 +364,18 @@ TEST_F(LroKernelSet, DafReaderCkEtMatchesCkcov) {
   checkNaifErrors();
 
   daf::File f(ckPath);
-  std::map<int, daf::Window> cover = daf::ckCoverage(f, [](int id, double t) {
+  // Converted to ET after merging, as convertDafCoverage does
+  std::map<int, daf::Window> cover = ckCoverageTicks(f);
+  for (auto &[id, w] : cover) {
     SpiceInt clock;
     ckmeta_c(id, "SCLK", &clock);
-    double et;
-    sct2e_c(clock, t, &et);
+    for (auto &iv : w) {
+      sct2e_c(clock, iv.first, &iv.first);
+      sct2e_c(clock, iv.second, &iv.second);
+    }
     checkNaifErrors();
-    return et;
-  });
+    w = daf::merge(std::move(w));
+  }
 
   ASSERT_EQ(cover.size(), 1);
   EXPECT_EQ(cover[-85000], cspiceCkCoverage(ckPath, -85000, "TDB"));

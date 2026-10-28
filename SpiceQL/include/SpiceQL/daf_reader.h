@@ -4,16 +4,16 @@
  *
  * @brief Reads coverage straight out of binary SPK and CK files.
  *
- * A self-contained reader for NAIF's DAF format that gets the coverage windows
- * spkcov_c and ckcov_c (INTERVAL level) would, without going through CSPICE.
+ * A self-contained reader for NAIF's DAF format that gets the array summaries
+ * (which hold SPK and CK segment bounds) and the per segment CK coverage
+ * ckcov_c (INTERVAL level) would, without going through CSPICE.
  * Nothing here touches the kernel pool, the DAF handle table or CSPICE's error
  * state, so it can be used from several threads at once and needs no kernels
  * furnished.
  *
  * The one thing it can't do alone is turn CK times into ET. CK times are
  * encoded SCLK ticks, and converting them needs the spacecraft's SCLK kernel,
- * so CK coverage comes back in ticks, or in ET through a converter the caller
- * supplies (usually a wrapper around sct2e_c).
+ * so CK coverage comes back in ticks for the caller to convert.
  *
  * Layouts follow NAIF's DAF and CK Required Reading, and the per-type coverage
  * rules are ports of CSPICE's zzckcv01 through zzckcv06, so the windows match
@@ -32,7 +32,6 @@
 #include <cstdint>
 #include <cerrno>
 #include <cstring>
-#include <map>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -132,9 +131,6 @@ namespace daf {
 
         readSummaries(fward);
       }
-
-      /** The ID word, e.g. "DAF/CK" or "DAF/SPK", with trailing blanks removed. */
-      const std::string &idWord() const { return m_idword; }
 
       /** The kernel type from the ID word ("CK", "SPK", "PCK", ...), or "" for old "NAIF/DAF" files. */
       std::string kind() const {
@@ -298,26 +294,40 @@ namespace daf {
 
       // Coverage reads are mostly a few words at a time (segment meta data,
       // single epochs), so small reads go through a cache of whole records,
-      // the way CSPICE's DAF layer buffers records. Without it each of those
-      // costs a seek and a read, and files with many segments come out slower
-      // than CSPICE. Bigger reads go straight to the file.
-      static constexpr size_t CACHE_RECORDS = 32;
+      // the way CSPICE's DAF layer buffers records. Bigger reads go straight
+      // to the file.
+      //
+      // Most of those reads jump around the file (summary records, searches
+      // of epochs), where reading more than the record needed only
+      // makes each read slower. Some walk forward through a segment instead:
+      // a type 6 segment with 200,000 mini-segments takes two epochs from
+      // each, so a record at a time is tens of thousands of reads per file.
+      // So a miss just past the last one reads further ahead, doubling up to
+      // MAX_READ_AHEAD records, and any other miss reads one record.
+      static constexpr size_t CACHE_RECORDS = 128;
+      static constexpr size_t MAX_READ_AHEAD = 64;
       static constexpr size_t DIRECT_READ_BYTES = 4 * RECORD_BYTES;
       mutable std::vector<char> m_cache = std::vector<char>(CACHE_RECORDS * RECORD_BYTES);
       mutable std::vector<int64_t> m_cachedRecord = std::vector<int64_t>(CACHE_RECORDS, -1);
-
-      void readRaw(uint64_t offset, char *dst, size_t n) const {
-        m_handle.read(offset, dst, n);
-      }
+      mutable uint64_t m_nextRecord = 0;
+      mutable size_t m_readAhead = 0;
 
       // Record r (0-based) from the cache, reading it on a miss
       const char *record(uint64_t r) const {
         size_t slot = (size_t)(r % CACHE_RECORDS);
         char *buf = m_cache.data() + slot * RECORD_BYTES;
         if (m_cachedRecord[slot] != (int64_t)r) {
-          // The last record of a file can be short
-          readRaw(r * RECORD_BYTES, buf, (size_t)std::min(RECORD_BYTES, m_size - r * RECORD_BYTES));
-          m_cachedRecord[slot] = (int64_t)r;
+          // Forward means at or a little past where the last read ended
+          bool forward = m_readAhead > 0 && r >= m_nextRecord && r < m_nextRecord + m_readAhead;
+          m_readAhead = forward ? std::min(m_readAhead * 2, MAX_READ_AHEAD) : 1;
+
+          // Stop at the end of the cache rather than wrap, and at the end of
+          // the file, whose last record can be short
+          uint64_t records = (m_size + RECORD_BYTES - 1) / RECORD_BYTES;
+          size_t n = (size_t)std::min<uint64_t>({m_readAhead, CACHE_RECORDS - slot, records - r});
+          m_handle.read(r * RECORD_BYTES, buf, (size_t)std::min<uint64_t>(n * RECORD_BYTES, m_size - r * RECORD_BYTES));
+          for (size_t i = 0; i < n; i++) m_cachedRecord[slot + i] = (int64_t)(r + i);
+          m_nextRecord = r + n;
         }
         return buf;
       }
@@ -327,7 +337,7 @@ namespace daf {
           throw std::runtime_error("Short read from DAF [" + m_path + "]");
         }
         if (n >= DIRECT_READ_BYTES) {
-          readRaw(offset, dst, n);
+          m_handle.read(offset, dst, n);
           return;
         }
         while (n > 0) {
@@ -394,9 +404,12 @@ namespace daf {
      * when CSPICE would have used a value it never set.
      *
      * zzckcv03 steps through the epochs one at a time. Epochs in a CK are
-     * required to increase, so this binary searches them instead, reading
-     * each from the file as it's needed. A segment with one interval, the
-     * common case, costs two reads however many records it has.
+     * required to increase, so this searches them instead, reading each from
+     * the file as it's needed. A segment with one interval, the common case,
+     * costs two reads however many records it has. The search gallops
+     * forward from the last interval's epochs before it bisects, so a segment
+     * with many intervals reads near where it already is rather than all
+     * over the epoch list.
      *
      * @param tick tick(i) is epoch i, for i in [0, ntick)
      */
@@ -410,7 +423,14 @@ namespace daf {
         // Interval starts are normally epochs themselves, so check the
         // current epoch before searching.
         if (tick(lo) >= value) return lo;
-        size_t hi = ntick;
+        // Double the step until an epoch at or after value, or the end
+        size_t below = lo, step = 1, hi = lo + 1;
+        while (hi < ntick && tick(hi) < value) {
+          below = hi;
+          step *= 2;
+          hi = below + std::min(step, ntick - below);
+        }
+        lo = below + 1;
         while (lo < hi) {
           size_t mid = lo + (hi - lo) / 2;
           if (tick(mid) < value) lo = mid + 1;
@@ -598,67 +618,6 @@ namespace daf {
                                std::to_string(type));
     }
     return w;
-  }
-
-
-  /**
-   * @brief INTERVAL level coverage of every ID in a CK, in encoded SCLK ticks.
-   *
-   * Each ID's window matches ckcov_c(file, id, SPICEFALSE, "INTERVAL", 0.0, "SCLK").
-   **/
-  inline std::map<int, Window> ckCoverageTicks(const File &f) {
-    std::map<int, Window> raw;
-    for (const Summary &s : f.summaries()) {
-      Window w = ckSegmentCoverage(f, s);
-      Window &dst = raw[s.ic[0]];
-      dst.insert(dst.end(), w.begin(), w.end());
-    }
-    for (auto &[id, w] : raw) w = merge(std::move(w));
-    return raw;
-  }
-
-
-  /**
-   * @brief INTERVAL level coverage of every ID in a CK, in ET.
-   *
-   * Matches ckcov_c(file, id, SPICEFALSE, "INTERVAL", 0.0, "TDB") per ID.
-   * Windows are merged in ticks before conversion, so the converter only runs
-   * on the merged endpoints; that gives the same window because SCLK to ET is
-   * monotonic. They're merged once more after, in case two endpoints meet in ET.
-   *
-   * @param toEt Called as toEt(ckId, ticks) and returns ET; typically resolves
-   *             the clock with ckmeta_c(ckId, "SCLK") and calls sct2e_c.
-   **/
-  template<class ToEt>
-  std::map<int, Window> ckCoverage(const File &f, ToEt &&toEt) {
-    std::map<int, Window> cover = ckCoverageTicks(f);
-    for (auto &[id, w] : cover) {
-      for (auto &iv : w) {
-        iv.first = toEt(id, iv.first);
-        iv.second = toEt(id, iv.second);
-      }
-      w = merge(std::move(w));
-    }
-    return cover;
-  }
-
-
-  /**
-   * @brief Coverage of every body in an SPK, in ET.
-   *
-   * Each body's window matches spkcov_c(file, body).
-   **/
-  inline std::map<int, Window> spkCoverage(const File &f) {
-    if (f.nd() != 2 || f.ni() != 6) {
-      throw std::runtime_error("[" + f.path() + "] does not have SPK summaries (ND/NI " +
-                               std::to_string(f.nd()) + "/" + std::to_string(f.ni()) + ")");
-    }
-    std::map<int, Window> cover;
-    for (const Summary &s : f.summaries()) {
-      cover[s.ic[0]].emplace_back(s.dc[0], s.dc[1]);
-    }
-    for (auto &[id, w] : cover) w = merge(std::move(w));
-    return cover;
   }
 
 }
