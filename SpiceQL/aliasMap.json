@@ -141,6 +141,13 @@
     "minirf": [
         "LRO_MINIRF"
     ],
+    "moc": [
+        "LRO_SC_BUS"
+    ],
+    "moon": [
+        "MOON_ME",
+        "MOON_PA"
+    ],
     "mrffr": [
         "CHANDRAYAAN-1_MRFFR"
     ],
