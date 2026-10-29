@@ -20,13 +20,13 @@
     },
     "deps" : ["/base"]
   },
-  "moon" : { 
+  "moon" : {
     "tspk" : {
       "noquality": {
         "kernels": ["moon_pa_de421_1900-2050.bpc$"]
       }
     },
-    "pck" : {
+    "fk" : {
       "kernels" : ["^moon_080317.tf$", "^moon_assoc_me.tf$"]
     },
     "deps" : ["/base"]

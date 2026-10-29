@@ -424,6 +424,41 @@ TEST_F(LroKernelSet, UnitTestGetTargetOrientations) {
 }
 
 
+TEST_F(LroKernelSet, UnitTestGetTargetOrientationsMoonME) {
+  vector<double> ets = {110000000};
+  // mission omitted — inferMission({}, {31001, 1}) must resolve "moon" via the
+  // frame cache (moon_080317.tf furnishes MOON_ME=31001) + aliasMap entry.
+  auto [resOrientations, kernels] = getTargetOrientations(ets, 31001, 1);
+
+  ASSERT_EQ(resOrientations.size(), 1);
+  ASSERT_EQ(resOrientations.at(0).size(), 7);
+  // moon_080317.tf in the test fixture defines MOON_ME as an identity rotation
+  // from J2000, so the result is the identity quaternion [1, 0, 0, 0].
+  EXPECT_NEAR(resOrientations.at(0)[0], 1.0, 1e-7);
+  EXPECT_NEAR(resOrientations.at(0)[1], 0.0, 1e-7);
+  EXPECT_NEAR(resOrientations.at(0)[2], 0.0, 1e-7);
+  EXPECT_NEAR(resOrientations.at(0)[3], 0.0, 1e-7);
+}
+
+
+TEST_F(LroMocQualityKernelSet, UnitTestGetTargetOrientationsBusToMoonMENoMission) {
+  vector<double> ets = {110000000};
+  auto [resOrientations, kernels] = getTargetOrientations(ets, -85000, 31001);
+
+  ASSERT_EQ(resOrientations.size(), 1);
+  ASSERT_EQ(resOrientations.at(0).size(), 7);
+  double norm = 0;
+  for (int i = 0; i < 4; i++) norm += resOrientations.at(0)[i] * resOrientations.at(0)[i];
+  EXPECT_NEAR(norm, 1.0, 1e-6);
+
+  std::set<string> cks, fks;
+  for (auto &k : kernels["ck"]) cks.insert(fs::path(k.get<string>()).filename().string());
+  for (auto &k : kernels["fk"]) fks.insert(fs::path(k.get<string>()).filename().string());
+  EXPECT_TRUE(cks.count("moc42r_1111111_1111111_v01.bc"));
+  EXPECT_TRUE(fks.count("moon_080317.tf"));
+}
+
+
 TEST_F(LroKernelSet, UnitTestGetTargetOrientation) {
   nlohmann::json testKernelJson;
   testKernelJson["kernels"] = {{ckPath1}, {ckPath2}, {spkPath1}, {spkPath2}, {spkPath3}, {ikPath2}, {fkPath}, {sclkPath}, {lskPath}};
@@ -589,6 +624,12 @@ class InferMissionFromCode : public ::testing::Test {
 TEST_F(InferMissionFromCode, SpacecraftCodeResolves) {
   // -85 -> "LRO" -> "lro"
   EXPECT_EQ(inferMission({}, {-85}), "lro");
+}
+
+
+TEST_F(InferMissionFromCode, SpacecraftBusCodeResolvesToCkOwner) {
+  // -85000 -> "LRO_SC_BUS" (cache) -> alias -> "moc", which owns the bus CKs
+  EXPECT_EQ(inferMission({}, {-85000}), "moc");
 }
 
 

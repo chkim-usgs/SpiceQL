@@ -12,16 +12,25 @@
 #include <algorithm>
 #include <map>
 #include <fstream>
+#include <set>
 #include <SpiceQL/spiceql_logging.h>
 #include <highfive/highfive.hpp>
 
 
-TEST_F(LroKernelSet, TestInventorySmithed) { 
+static std::set<std::string> kernelFilenames(const nlohmann::json &list) {
+  std::set<std::string> names;
+  for (const auto &k : list) names.insert(fs::path(k.get<std::string>()).filename().string());
+  return names;
+}
+
+
+TEST_F(LroKernelSet, TestInventorySmithed) {
   Inventory::create_database();
   nlohmann::json kernels = Inventory::search_for_kernelset("lroc", {"fk", "sclk", "spk", "ck"}, 110000000, 140000000, {"smithed", "reconstructed"}, {"smithed", "reconstructed"}, false);
   SPDLOG_DEBUG("Returned Kernels {} ", kernels.dump());
-  
-  EXPECT_EQ(fs::path(kernels["fk"][0]).filename(), "lro_frames_1111111_v01.tf");
+
+  EXPECT_TRUE(kernelFilenames(kernels["fk"]).count("lro_frames_1111111_v01.tf"));
+  EXPECT_TRUE(kernelFilenames(kernels["fk"]).count("moon_080317.tf"));
   EXPECT_EQ(fs::path(kernels["sclk"][0]).filename(), "lro_clkcor_2020184_v00.tsc");
   EXPECT_EQ(fs::path(kernels["ck"][0]).filename(), "soc31_1111111_1111111_v21.bc"); 
   
@@ -83,7 +92,7 @@ TEST_F(LroMocQualityKernelSet, TestInventoryQualityOwnerReporting) {
 TEST_F(LroKernelSet, TestInventoryRecon) { 
   Inventory::create_database();
   nlohmann::json kernels = Inventory::search_for_kernelset("lroc", {"fk", "sclk", "spk", "ck"}, 110000000, 140000000, {"reconstructed"}, {"reconstructed"}, false);
-  EXPECT_EQ(fs::path(kernels["fk"][0]).filename(), "lro_frames_1111111_v01.tf");
+  EXPECT_TRUE(kernelFilenames(kernels["fk"]).count("lro_frames_1111111_v01.tf"));
   EXPECT_EQ(fs::path(kernels["sclk"][0]).filename(), "lro_clkcor_2020184_v00.tsc");
   EXPECT_TRUE(!kernels.contains("spk")); // no spks
   EXPECT_EQ(fs::path(kernels["ck"][0]).filename(), "soc31_1111111_1111111_v21.bc");
@@ -94,7 +103,7 @@ TEST_F(LroKernelSet, TestInventoryRecon) {
 TEST_F(LroKernelSet, TestInventoryPredicted) { 
   Inventory::create_database();
   nlohmann::json kernels = Inventory::search_for_kernelset("lroc", {"fk", "sclk", "spk", "ck"}, 110000000, 140000000, {"predicted"}, {"predicted"});
-  EXPECT_EQ(fs::path(kernels["fk"][0]).filename(), "lro_frames_1111111_v01.tf");
+  EXPECT_TRUE(kernelFilenames(kernels["fk"]).count("lro_frames_1111111_v01.tf"));
   EXPECT_EQ(fs::path(kernels["sclk"][0]).filename(), "lro_clkcor_2020184_v00.tsc");
   EXPECT_TRUE(!kernels.contains("spk")); // no spks
   EXPECT_TRUE(!kernels.contains("cks")); // no cks
@@ -146,23 +155,18 @@ TEST_F(LroKernelSet, TestInventorySearch) {
   EXPECT_EQ(kernels["ck"].size(), 2);
   EXPECT_EQ(fs::path(kernels["ck"][0].get<string>()).filename(), "soc31_1111111_1111111_v21.bc" );
   EXPECT_EQ(fs::path(kernels["iak"][0].get<string>()).filename(), "lro_instrumentAddendum_v11.ti");
-  EXPECT_EQ(fs::path(kernels["fk"][0].get<string>()).filename(), "lro_frames_1111111_v01.tf");
+  EXPECT_TRUE(kernelFilenames(kernels["fk"]).count("lro_frames_1111111_v01.tf"));
   EXPECT_EQ(fs::path(kernels["sclk"][0].get<string>()).filename(), "lro_clkcor_2020184_v00.tsc");
 }
 
 TEST_F(LroKernelSet, TestInventorySearchSetsNoOverwrite) {
   // do a time query
-  pair<string, nlohmann::json> result = searchForKernelsets({"moon", "base"}, {"pck"}, 110000000, 140000001, {"reconstructed"}, {"reconstructed"}, false);
+  pair<string, nlohmann::json> result = searchForKernelsets({"moon", "base"}, {"pck", "fk"}, 110000000, 140000001, {"reconstructed"}, {"reconstructed"}, false);
   nlohmann::json kernels = result.second;
   SPDLOG_DEBUG("TEST KERNELS: {}", kernels.dump(4));
-  EXPECT_EQ(kernels["pck"].size(), 2);
-  // Check that both expected kernels are present (order may vary)
-  std::set<std::string> filenames;
-  for (const auto& kernel : kernels["pck"]) {
-    filenames.insert(fs::path(kernel.get<string>()).filename().string());
-  }
-  EXPECT_TRUE(filenames.count("moon_080317.tf"));
-  EXPECT_TRUE(filenames.count("pck00009.tpc"));
+  EXPECT_EQ(kernels["pck"].size(), 1);
+  EXPECT_TRUE(kernelFilenames(kernels["pck"]).count("pck00009.tpc"));
+  EXPECT_TRUE(kernelFilenames(kernels["fk"]).count("moon_080317.tf"));
 }
 
 
@@ -184,23 +188,18 @@ TEST_F(LroKernelSet, TestInventorySearchSetsOverwrite) {
   pair<string, nlohmann::json> result = searchForKernelsets({"moon", "base"}, {"pck"}, 110000000, 140000001, {"reconstructed"}, {"reconstructed"}, false, -1, 1, true);
   nlohmann::json kernels = result.second;
   SPDLOG_DEBUG("TEST KERNELS: {}", kernels.dump(4));
-  EXPECT_EQ(kernels["pck"].size(), 2);
-  // Check that pck00009.tpc is present (order may vary)
-  std::set<std::string> filenames;
-  for (const auto& kernel : kernels["pck"]) {
-    filenames.insert(fs::path(kernel.get<string>()).filename().string());
-  }
-  EXPECT_TRUE(filenames.count("pck00009.tpc"));
+  EXPECT_EQ(kernels["pck"].size(), 1);
+  EXPECT_TRUE(kernelFilenames(kernels["pck"]).count("pck00009.tpc"));
 }
 
 
 TEST_F(LroKernelSet, TestInventorySearchSetFromRegex) {
   // do a time query
-  nlohmann::json kernels = Inventory::search_for_kernelset_from_regex({"/lroc/sclk/.*", "/lroc/spk/smithed/LRO_TEST_GRGM660MAT[0-9]{3}.bsp", "/iau_moon/pck/moon.*"});
+  nlohmann::json kernels = Inventory::search_for_kernelset_from_regex({"/lroc/sclk/.*", "/lroc/spk/smithed/LRO_TEST_GRGM660MAT[0-9]{3}.bsp", "/iau_moon/fk/moon.*"});
   SPDLOG_DEBUG("TEST KERNELS: {}", kernels.dump(4));
   EXPECT_EQ(kernels["spk"].size(), 3);
-  EXPECT_EQ(kernels["spk_quality"].get<string>(), "smithed"); 
-  EXPECT_EQ(fs::path(kernels["pck"][0].get<string>()).filename(), "moon_080317.tf");
+  EXPECT_EQ(kernels["spk_quality"].get<string>(), "smithed");
+  EXPECT_EQ(fs::path(kernels["fk"][0].get<string>()).filename(), "moon_080317.tf");
 }
 
 TEST_F(TempTestingFiles, TestInventorySetCacheDir) {

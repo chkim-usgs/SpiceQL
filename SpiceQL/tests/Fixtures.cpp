@@ -425,13 +425,24 @@ void LroKernelSet::SetUp() {
   };
 
   fkPath = root / "fk" / "lro_frames_1111111_v01.tf";
-  moonPckPath = root / "pck" / "moon_080317.tf"; 
+  moonPckPath = root / "pck" / "moon_080317.tf";
   basePckPath = root / "pck" / "pck00009.tpc";
 
-  // contents doesn't matter rn 
   writeTextKernel(fkPath, "fk", jKeywords);
-  writeTextKernel(moonPckPath, "fk", jKeywords);
   writeTextKernel(basePckPath, "fk", jKeywords);
+  
+  // define moon_me
+  nlohmann::json moonMeKeywords = {
+    {"FRAME_MOON_ME", 31001},
+    {"FRAME_31001_NAME", "MOON_ME"},
+    {"FRAME_31001_CLASS", 4},
+    {"FRAME_31001_CLASS_ID", 31001},
+    {"FRAME_31001_CENTER", 301},
+    {"TKFRAME_31001_SPEC", "MATRIX"},
+    {"TKFRAME_31001_RELATIVE", "J2000"},
+    {"TKFRAME_31001_MATRIX", {1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0}}
+  };
+  writeTextKernel(moonPckPath, "fk", moonMeKeywords);
 
   conf = R"({
     "moc" : {

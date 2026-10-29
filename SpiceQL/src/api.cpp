@@ -379,7 +379,16 @@ namespace SpiceQL {
         if (mission.empty()) mission = inferMission({}, {toFrame, refFrame});
 
         if (searchKernels) {
-            ephemKernels = Inventory::search_for_kernelsets({mission, "base"}, {"sclk", "ck", "pck", "fk", "ik", "iak", "lsk", "tspk"}, ets.front(), ets.back(), ckQualities, {"noquality"}, fullKernelPath, limitCk, limitSpk);
+            vector<string> searchMissions = {mission, "base"};
+            // refFrame may resolve to a different mission (e.g. 31001=MOON_ME → "moon")
+            // whose FK kernels aren't stored under the primary mission's DB key.
+            if (!mission.empty()) {
+                string refMission = inferMission({}, {refFrame});
+                if (!refMission.empty() && refMission != mission) {
+                    searchMissions.insert(searchMissions.begin() + 1, refMission);
+                }
+            }
+            ephemKernels = Inventory::search_for_kernelsets(searchMissions, {"sclk", "ck", "pck", "fk", "ik", "iak", "lsk", "tspk"}, ets.front(), ets.back(), ckQualities, {"noquality"}, fullKernelPath, limitCk, limitSpk);
         }
 
         if (!kernelList.empty()) {
