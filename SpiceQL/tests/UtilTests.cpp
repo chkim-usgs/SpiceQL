@@ -687,3 +687,76 @@ TEST_F(ConfigDirectoryTest, EmptyOverrideRestoresFallback) {
   set("CONDA_PREFIX", emptyPrefix.string());
   EXPECT_THROW(getConfigDirectory(), std::runtime_error);
 }
+
+
+TEST_F(TempTestingFiles, UnitTestGetKernelCoverage) {
+  fs::path spkPath = static_cast<fs::path>(getenv("SPICEROOT")) / "coverage_test.bsp";
+
+  // Body -85: two overlapping segments, then a gap, then a third segment,
+  // written out of time order. Body 301 is positive and should be skipped.
+  // Written with spkw13_c directly since writeSpk only writes the first segment.
+  struct Seg { int body; int center; double start; double stop; };
+  std::vector<Seg> segs = {{-85, 301, 400, 500}, {-85, 301, 100, 200},
+                           {-85, 301, 150, 250}, {301, 3, 100, 500}};
+
+  SpiceInt handle;
+  spkopn_c(spkPath.string().c_str(), "coverage test", 0, &handle);
+  for (auto &seg : segs) {
+    SpiceDouble states[2][6] = {{1, 2, 3, 0.1, 0.2, 0.3}, {4, 5, 6, 0.4, 0.5, 0.6}};
+    SpiceDouble epochs[2] = {seg.start, seg.stop};
+    spkw13_c(handle, seg.body, seg.center, "J2000", seg.start, seg.stop, "SEG", 1, 2, states, epochs);
+  }
+  spkcls_c(handle);
+  checkNaifErrors();
+
+  KernelCoverage coverage = getKernelCoverage(spkPath);
+
+  // The overlapping segments merge into one interval and the gap splits it.
+  std::vector<double> expectedIntervalStarts = {100, 400};
+  std::vector<double> expectedIntervalStops = {250, 500};
+  std::vector<int> expectedIntervalCodes = {-85, -85};
+  EXPECT_EQ(coverage.interval_starts, expectedIntervalStarts);
+  EXPECT_EQ(coverage.interval_stops, expectedIntervalStops);
+  EXPECT_EQ(coverage.interval_body_codes, expectedIntervalCodes);
+
+  // The bounds come from the same read and match the bounds-only read.
+  std::pair<double, double> bounds = getKernelStartStopTimes(spkPath);
+  EXPECT_EQ(coverage.start_time, bounds.first);
+  EXPECT_EQ(coverage.stop_time, bounds.second);
+}
+
+
+TEST_F(LroKernelSet, UnitTestGetKernelCoverageCkGap) {
+  Kernel lsk(lskPath);
+  Kernel sclk(sclkPath);
+
+  // One segment with two interpolation intervals and a gap between them
+  fs::path ckPath = root / "ck" / "coverage_gap.bc";
+  std::vector<double> ets = {110000000, 112000000, 118000000, 120000000};
+  std::vector<double> ticks(ets.size());
+  for (size_t i = 0; i < ets.size(); i++) {
+    sce2c_c(-85, ets[i], &ticks[i]);
+  }
+  SpiceDouble quats[4][4] = {{1, 0, 0, 0}, {1, 0, 0, 0}, {1, 0, 0, 0}, {1, 0, 0, 0}};
+  SpiceDouble starts[2] = {ticks[0], ticks[2]};
+
+  SpiceInt handle;
+  ckopn_c(ckPath.string().c_str(), "coverage gap", 0, &handle);
+  ckw03_c(handle, ticks[0], ticks[3], -85000, "J2000", SPICEFALSE, "GAP",
+          4, ticks.data(), quats, NULL, 2, starts);
+  ckcls_c(handle);
+  checkNaifErrors();
+
+  KernelCoverage coverage = getKernelCoverage(ckPath);
+
+  ASSERT_EQ(coverage.interval_starts.size(), 2);
+  EXPECT_NEAR(coverage.interval_starts[0], 110000000, 1e-3);
+  EXPECT_NEAR(coverage.interval_stops[0], 112000000, 1e-3);
+  EXPECT_NEAR(coverage.interval_starts[1], 118000000, 1e-3);
+  EXPECT_NEAR(coverage.interval_stops[1], 120000000, 1e-3);
+  EXPECT_EQ(coverage.interval_body_codes, std::vector<int>({-85000, -85000}));
+
+  std::pair<double, double> bounds = getKernelStartStopTimes(ckPath);
+  EXPECT_EQ(coverage.start_time, bounds.first);
+  EXPECT_EQ(coverage.stop_time, bounds.second);
+}

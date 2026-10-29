@@ -9,6 +9,9 @@
 #include <regex>
 #include <chrono>
 #include <unordered_set>
+#include <map>
+#include <algorithm>
+#include <tuple>
 #include <cmath>
 #include <cstring>
 #include <float.h>
@@ -942,6 +945,187 @@ namespace SpiceQL {
     }
 
     return pair<double, double>(start_time, stop_time);
+  }
+
+
+  void sortCoverageRows(KernelCoverage &coverage) {
+    // Sort rows by start, then stop, then body code, keeping the columns of a
+    // row together.
+    auto sortRows = [](vector<double> &starts, vector<double> &stops, vector<int> &codes) {
+      vector<size_t> order(starts.size());
+      for (size_t i = 0; i < order.size(); i++) order[i] = i;
+      sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+        return tie(starts[a], stops[a], codes[a]) < tie(starts[b], stops[b], codes[b]);
+      });
+
+      vector<double> sortedStarts, sortedStops;
+      vector<int> sortedCodes;
+      sortedStarts.reserve(order.size());
+      sortedStops.reserve(order.size());
+      sortedCodes.reserve(order.size());
+      for (size_t i : order) {
+        sortedStarts.push_back(starts[i]);
+        sortedStops.push_back(stops[i]);
+        sortedCodes.push_back(codes[i]);
+      }
+      starts = std::move(sortedStarts);
+      stops = std::move(sortedStops);
+      codes = std::move(sortedCodes);
+    };
+
+    sortRows(coverage.interval_starts, coverage.interval_stops, coverage.interval_body_codes);
+  }
+
+
+  KernelCoverage getKernelCoverage(string kpath) {
+    SPDLOG_TRACE("getKernelCoverage({})", kpath);
+
+    string resolved = kpath;
+    if (!fs::exists(resolved)) {
+      resolved = (getDataDirectory() / fs::path(kpath)).string();
+    }
+
+    SpiceChar arch[33], ktype[33];
+    checkNaifErrors();
+    getfat_c(resolved.c_str(), 33, 33, arch, ktype);
+    checkNaifErrors();
+
+    const string type = ktype;
+    if (type != "CK" && type != "SPK") {
+      throw invalid_argument("Kernel [" + kpath + "] is a " + type +
+                             ", which has no coverage to collect");
+    }
+
+    KernelCoverage coverage;
+
+    // Everything comes from one open of the file: the bounds and, for SPKs,
+    // the intervals. Only CK intervals need NAIF's ckcov_c, which
+    // reuses this handle rather than reopening the file.
+    SpiceInt handle = 0;
+    dafopr_c(resolved.c_str(), &handle);
+    checkNaifErrors();
+
+    // Segment bounds per negative NAIF ID, in file order
+    map<int, vector<pair<double, double>>> idSegments;
+
+    try {
+      SpiceInt nd = 0, ni = 0, fward = 0, bward = 0, freeAddr = 0;
+      SpiceChar ifname[61];
+      dafrfr_c(handle, 61, &nd, &ni, ifname, &fward, &bward, &freeAddr);
+      checkNaifErrors();
+
+      SpiceDouble summary[128];
+      SpiceDouble dc[128];
+      SpiceInt ic[128];
+
+      bool first = true;
+
+      dafbfs_c(handle);
+      checkNaifErrors();
+
+      SpiceBoolean found = SPICEFALSE;
+      daffna_c(&found);
+      checkNaifErrors();
+
+      while (found) {
+        dafgs_c(summary);
+        dafus_c(summary, nd, ni, dc, ic);
+        checkNaifErrors();
+
+        if (ic[0] < 0) {
+          double boundStart = dc[0];
+          double boundStop  = dc[1];
+
+          if (type == "CK") {
+            // The bounds keep getKernelStartStopTimes' id / 1000 clock, so the
+            // existing start and stop times don't change.
+            sct2e_c(ic[0] / 1000, dc[0], &boundStart);
+            sct2e_c(ic[0] / 1000, dc[1], &boundStop);
+            checkNaifErrors();
+          }
+
+          if (first) {
+            coverage.start_time = boundStart;
+            coverage.stop_time = boundStop;
+            first = false;
+          }
+          else {
+            coverage.start_time = min(coverage.start_time, boundStart);
+            coverage.stop_time = max(coverage.stop_time, boundStop);
+          }
+
+          if (type == "SPK") {
+            idSegments[ic[0]].emplace_back(dc[0], dc[1]);
+          }
+          else {
+            idSegments[ic[0]];
+          }
+        }
+
+        daffna_c(&found);
+        checkNaifErrors();
+      }
+
+      // Intervals: one coverage window per NAIF ID, as kerneldbgen does. Windows
+      // of different IDs can overlap each other, which is why the body code is
+      // kept per row.
+      if (type == "SPK") {
+        // spkcov_c builds its window by inserting each segment with wninsd_c,
+        // which merges any intervals that overlap or touch. Merging the sorted
+        // segments gives the same window without walking the file again.
+        for (auto &[id, segs] : idSegments) {
+          sort(segs.begin(), segs.end());
+          double curStart = segs[0].first;
+          double curStop = segs[0].second;
+          for (size_t j = 1; j < segs.size(); j++) {
+            if (segs[j].first <= curStop) {
+              curStop = max(curStop, segs[j].second);
+            }
+            else {
+              coverage.interval_starts.push_back(curStart);
+              coverage.interval_stops.push_back(curStop);
+              coverage.interval_body_codes.push_back(id);
+              curStart = segs[j].first;
+              curStop = segs[j].second;
+            }
+          }
+          coverage.interval_starts.push_back(curStart);
+          coverage.interval_stops.push_back(curStop);
+          coverage.interval_body_codes.push_back(id);
+        }
+      }
+      else {
+        // INTERVAL level needs the interpolation intervals inside each
+        // segment, which only ckcov_c knows how to read.
+        //  200,000 is the max coverage window size kerneldbgen allows
+        SPICEDOUBLE_CELL(cover, 200000);
+        for (auto &[id, segs] : idSegments) {
+          scard_c(0, &cover);
+          ckcov_c(resolved.c_str(), id, SPICEFALSE, "INTERVAL", 0.0, "TDB", &cover);
+          checkNaifErrors();
+
+          for (SpiceInt j = 0; j < wncard_c(&cover); j++) {
+            SpiceDouble begin, end;
+            wnfetd_c(&cover, j, &begin, &end);
+            coverage.interval_starts.push_back(begin);
+            coverage.interval_stops.push_back(end);
+            coverage.interval_body_codes.push_back(id);
+          }
+          checkNaifErrors();
+        }
+      }
+    }
+    catch (...) {
+      dafcls_c(handle);
+      throw;
+    }
+
+    dafcls_c(handle);
+    checkNaifErrors();
+
+    sortCoverageRows(coverage);
+
+    return coverage;
   }
 
 
