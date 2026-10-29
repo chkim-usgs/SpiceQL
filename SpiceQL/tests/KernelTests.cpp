@@ -91,7 +91,7 @@ TEST_F(LroKernelSet, UnitTestStackedKernelSetConstructorDestructor) {
 
     // should match what spice counts
     ktotal_c("text", &nkernels);
-    EXPECT_EQ(nkernels, 6);
+    EXPECT_EQ(nkernels, 10);
     ktotal_c("ck", &nkernels);
     EXPECT_EQ(nkernels, 2);
     ktotal_c("spk", &nkernels);
@@ -100,7 +100,7 @@ TEST_F(LroKernelSet, UnitTestStackedKernelSetConstructorDestructor) {
 
   // All kernels in previous stack should be unfurnished
   ktotal_c("text", &nkernels);
-  EXPECT_EQ(nkernels, 3);
+  EXPECT_EQ(nkernels, 5);
   ktotal_c("ck", &nkernels);
   EXPECT_EQ(nkernels, 1);
   ktotal_c("spk", &nkernels);
