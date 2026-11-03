@@ -54,7 +54,7 @@ namespace SpiceQL {
                                     double /*start_time*/, double /*stop_time*/,
                                     vector<string> /*ckQualities*/, vector<string> /*spkQualities*/,
                                     bool /*full_kernel_path*/, int /*limit_ck*/, int /*limit_spk*/,
-                                    bool /*overwrite*/) {
+                                    bool /*overwrite*/, string /*priority_pck*/) {
             throw runtime_error(kSearchUnavailableMsg);
         }
 

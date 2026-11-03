@@ -448,6 +448,12 @@ val searchForKernelsets_w(const val &spiceqlNames, const val &opts) {
   static const std::vector<std::string> kAllTypes = {
       "ck", "spk", "tspk", "lsk", "mk", "sclk", "iak", "ik", "fk", "dsk", "pck", "ek"};
   return guard([&]() -> val {
+  SpiceQL::QueryOpts options;
+  options.useWeb = optBool(opts, "useWeb", false);
+  options.fullKernelPath = optBool(opts, "fullKernelPath", false);
+  options.limitCk = optInt(opts, "limitCk", -1);
+  options.limitSpk = optInt(opts, "limitSpk", 1);
+  options.priorityPck = optStr(opts, "priorityPck", "");
   auto r = SpiceQL::searchForKernelsets(
       valToStrVec(spiceqlNames),
       optStrVec(opts, "types", kAllTypes),
@@ -457,9 +463,7 @@ val searchForKernelsets_w(const val &spiceqlNames, const val &opts) {
                                : std::numeric_limits<double>::max(),
       optStrVec(opts, "ckQualities", kDefaultQualities),
       optStrVec(opts, "spkQualities", kDefaultQualities),
-      optBool(opts, "useWeb", false), optBool(opts, "fullKernelPath", false),
-      optInt(opts, "limitCk", -1), optInt(opts, "limitSpk", 1),
-      optBool(opts, "overwrite", false));
+      options, optBool(opts, "overwrite", false));
   return wrapPair(r);
   });
 }

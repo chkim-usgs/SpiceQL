@@ -6,6 +6,7 @@
 
 // wrap struct members by value so python lists can be assigned to vector members
 %naturalvar SpiceQL::QueryOpts::kernelList;
+%naturalvar SpiceQL::QueryOpts::priorityPck;
 
 // The QueryOpts overloads in api.h are hidden from SWIG since python loses
 // keyword args on overloaded functions. Instead each function takes
@@ -35,9 +36,33 @@ SPICEQL_OPTIONS_KWARG(findTargetKeywords, _OPTION_KEYS)
 SPICEQL_OPTIONS_KWARG(frameTrace, _OPTION_KEYS)
 SPICEQL_OPTIONS_KWARG(extractExactCkTimes, _OPTION_KEYS)
 SPICEQL_OPTIONS_KWARG(getExactTargetOrientations, _OPTION_KEYS)
-SPICEQL_OPTIONS_KWARG(searchForKernelsets, ("useWeb", "fullKernelPath", "limitCk", "limitSpk"))
+
+// searchForKernelsets options include priorityPck, which the individual param overload
+// doesn't take, so options are routed to the QueryOpts overload instead.
+%pythonprepend SpiceQL::searchForKernelsets %{
+    options = kwargs.pop("options", None)
+    if options is not None:
+        options = _to_options(options, kwargs, ("useWeb", "fullKernelPath", "limitCk", "limitSpk"))
+        return _searchForKernelsetsQueryOpts(*args, options=options, **kwargs)
+%}
 
 %include <SpiceQL/api.h>
+
+// non overloaded wrapper of the hidden QueryOpts overload of searchForKernelsets
+// so it keeps keyword args, called by searchForKernelsets when options is given
+%inline %{
+  inline std::pair<std::string, nlohmann::json> _searchForKernelsetsQueryOpts(
+      std::vector<std::string> spiceqlNames,
+      std::vector<std::string> types={"ck", "spk", "tspk", "lsk", "mk", "sclk", "iak", "ik", "fk", "dsk", "pck", "ek"},
+      double startTime=-std::numeric_limits<double>::max(),
+      double stopTime=std::numeric_limits<double>::max(),
+      std::vector<std::string> ckQualities={"smithed", "reconstructed"},
+      std::vector<std::string> spkQualities={"smithed", "reconstructed"},
+      SpiceQL::QueryOpts options={},
+      bool overwrite=false) {
+    return SpiceQL::searchForKernelsets(spiceqlNames, types, startTime, stopTime, ckQualities, spkQualities, options, overwrite);
+  }
+%}
 
 // QueryOpts({"limitCk": 2, ...}) and options.toJson(), using the
 // to_json/from_json defined in api.h; missing keys keep their defaults.
@@ -56,16 +81,20 @@ SPICEQL_OPTIONS_KWARG(searchForKernelsets, ("useWeb", "fullKernelPath", "limitCk
 %pythoncode %{
 _OPTION_KEYS = ("useWeb", "searchKernels", "fullKernelPath", "limitCk", "limitSpk", "kernelList")
 
+def _to_options(options, kwargs, keys):
+    for key in keys:
+        if key in kwargs:
+            raise TypeError(f"{key} given both as a keyword argument and in options")
+    if not isinstance(options, QueryOpts):
+        options = QueryOpts(options)
+    return options
+
 def _unpack_options(kwargs, keys=_OPTION_KEYS):
     options = kwargs.pop("options", None)
     if options is None:
         return kwargs
-    if not isinstance(options, QueryOpts):
-        options = QueryOpts(options)
-    options = options.toJson()
+    options = _to_options(options, kwargs, keys).toJson()
     for key in keys:
-        if key in kwargs:
-            raise TypeError(f"{key} given both as a keyword argument and in options")
         kwargs[key] = options[key]
     return kwargs
 %}

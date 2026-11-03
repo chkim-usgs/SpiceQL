@@ -217,10 +217,12 @@ TEST(QueryOptsTests, TestJsonConversion) {
   options.limitCk = 2;
   options.limitSpk = 3;
   options.kernelList = {"a.bc", "b.bsp"};
+  options.priorityPck = "latest";
 
   nlohmann::json j = options;
   EXPECT_EQ(j, nlohmann::json({{"useWeb", true}, {"searchKernels", false}, {"fullKernelPath", true},
-                               {"limitCk", 2}, {"limitSpk", 3}, {"kernelList", {"a.bc", "b.bsp"}}}));
+                               {"limitCk", 2}, {"limitSpk", 3}, {"kernelList", {"a.bc", "b.bsp"}},
+                               {"priorityPck", "latest"}}));
 
   QueryOpts roundTrip = j.get<QueryOpts>();
   EXPECT_EQ(nlohmann::json(roundTrip), j);
@@ -233,6 +235,75 @@ TEST(QueryOptsTests, TestJsonConversion) {
   EXPECT_FALSE(partial.fullKernelPath);
   EXPECT_EQ(partial.limitSpk, 1);
   EXPECT_TRUE(partial.kernelList.empty());
+  EXPECT_EQ(partial.priorityPck, "");
+}
+
+
+TEST(CollapseGenericPcks, TestNoOption) {
+  nlohmann::json kernels = {{"pck", {"mro/pck/pck00008.tpc", "base/pck/pck00009.tpc"}}};
+  nlohmann::json expected = kernels;
+  collapseGenericPcks(kernels, "", {"mro"});
+  EXPECT_EQ(kernels, expected);
+}
+
+
+TEST(CollapseGenericPcks, TestMission) {
+  nlohmann::json kernels = {{"pck", {"odyssey/pck/pck00010.tpc", "mro/pck/pck00008.tpc", "base/pck/pck00009.tpc", "base/pck/moon_080317.tf"}}};
+  collapseGenericPcks(kernels, "mission", {"mro"});
+  EXPECT_EQ(kernels["pck"], nlohmann::json({"base/pck/moon_080317.tf", "mro/pck/pck00008.tpc"}));
+
+  // base is only the fallback, even when queried before the mission
+  kernels = {{"pck", {"base/pck/pck00009.tpc", "tgo/pck/pck00010.tpc", "newhorizons/pck/pck00011.tpc", "tgo/pck/de-403-masses.tpc"}}};
+  collapseGenericPcks(kernels, "mission", {"base", "tgo", "cassis"});
+  EXPECT_EQ(kernels["pck"], nlohmann::json({"tgo/pck/de-403-masses.tpc", "tgo/pck/pck00010.tpc"}));
+
+  // order of the missions doesn't matter, the highest version under any of them is kept
+  for (const vector<string> &missions : vector<vector<string>>{{"tgo", "mro"}, {"mro", "tgo"}}) {
+    kernels = {{"pck", {"mro/pck/pck00008.tpc", "tgo/pck/pck00010.tpc", "base/pck/pck00011.tpc"}}};
+    collapseGenericPcks(kernels, "mission", missions);
+    EXPECT_EQ(kernels["pck"], nlohmann::json({"tgo/pck/pck00010.tpc"}));
+  }
+
+  // highest version within a mission directory, not the first listed
+  kernels = {{"pck", {"mro/pck/pck00008.tpc", "mro/pck/pck00010.tpc", "base/pck/pck00011.tpc"}}};
+  collapseGenericPcks(kernels, "mission", {"mro"});
+  EXPECT_EQ(kernels["pck"], nlohmann::json({"mro/pck/pck00010.tpc"}));
+
+  // no copy under the preferred missions, falls back to base
+  kernels = {{"pck", {"odyssey/pck/pck00010.tpc", "base/pck/pck00009.tpc"}}};
+  collapseGenericPcks(kernels, "Mission", {"mro"});
+  EXPECT_EQ(kernels["pck"], nlohmann::json({"base/pck/pck00009.tpc"}));
+
+  // no copy under the preferred missions or base, falls back to the highest version
+  kernels = {{"pck", {"mars/pck/pck00008.tpc", "odyssey/pck/pck00010.tpc"}}};
+  collapseGenericPcks(kernels, "mission", {"mro"});
+  EXPECT_EQ(kernels["pck"], nlohmann::json({"odyssey/pck/pck00010.tpc"}));
+}
+
+
+TEST(CollapseGenericPcks, TestLatest) {
+  nlohmann::json kernels = {{"pck", {"mro/pck/pck00008.tpc", "base/pck/pck00009.tpc", "base/pck/pck00010_msgr_v10.tpc"}}};
+  collapseGenericPcks(kernels, "latest", {"mro"});
+  EXPECT_EQ(kernels["pck"], nlohmann::json({"base/pck/pck00010_msgr_v10.tpc", "base/pck/pck00009.tpc"}));
+}
+
+
+TEST(CollapseGenericPcks, TestInvalidOption) {
+  nlohmann::json kernels = {{"pck", {"mro/pck/pck00008.tpc"}}};
+  EXPECT_THROW(collapseGenericPcks(kernels, "newest", {"mro"}), std::invalid_argument);
+}
+
+
+TEST_F(LroKernelSet, TestInventorySearchSetsPriorityPck) {
+  QueryOpts options;
+  options.priorityPck = "mission";
+  pair<string, nlohmann::json> result = searchForKernelsets({"moon", "base"}, {"pck", "fk"}, 110000000, 140000001, {"reconstructed"}, {"reconstructed"}, options);
+  nlohmann::json kernels = result.second;
+  EXPECT_EQ(kernels["pck"].size(), 1);
+  EXPECT_TRUE(kernelFilenames(kernels["pck"]).count("pck00009.tpc"));
+
+  options.priorityPck = "newest";
+  EXPECT_THROW(searchForKernelsets({"moon", "base"}, {"pck"}, 110000000, 140000001, {"reconstructed"}, {"reconstructed"}, options), std::invalid_argument);
 }
 
 // never called, instantiates every QueryOpts overload so they're compile checked

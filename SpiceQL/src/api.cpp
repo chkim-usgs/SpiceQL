@@ -1462,9 +1462,26 @@ namespace SpiceQL {
                                                           int limitCk, 
                                                           int limitSpk,
                                                           bool overwrite) {
-    SPDLOG_TRACE("Calling searchForKernelsets with {}, {}, {}, {}, {}, {}, {}", spiceqlNames, types, startTime, stopTime, ckQualities.size(), spkQualities.size(), useWeb);
+      QueryOpts options;
+      options.useWeb = useWeb;
+      options.fullKernelPath = fullKernelPath;
+      options.limitCk = limitCk;
+      options.limitSpk = limitSpk;
+      return searchForKernelsets(spiceqlNames, types, startTime, stopTime, ckQualities, spkQualities, options, overwrite);
+  }
+
+
+    std::pair<string, nlohmann::json> searchForKernelsets(vector<string> spiceqlNames, 
+                                                          vector<string> types, 
+                                                          double startTime, 
+                                                          double stopTime,
+                                                          vector<string> ckQualities, 
+                                                          vector<string> spkQualities, 
+                                                          QueryOpts options,
+                                                          bool overwrite) {
+    SPDLOG_TRACE("Calling searchForKernelsets with {}, {}, {}, {}, {}, {}, {}", spiceqlNames, types, startTime, stopTime, ckQualities.size(), spkQualities.size(), options.useWeb);
     
-      if (useWeb){
+      if (options.useWeb){
         json args = json::object({
             {"spiceqlNames", spiceqlNames},
             {"types", types},
@@ -1472,16 +1489,17 @@ namespace SpiceQL {
             {"stopTime", stopTime},
             {"ckQualities", ckQualities},
             {"spkQualities", spkQualities},
-            {"fullKernelPath", fullKernelPath},
-            {"limitCk", limitCk},
-            {"limitSpk", limitSpk},
-            {"overwrite", overwrite}
+            {"fullKernelPath", options.fullKernelPath},
+            {"limitCk", options.limitCk},
+            {"limitSpk", options.limitSpk},
+            {"overwrite", overwrite},
+            {"priorityPck", options.priorityPck}
         });
         json out = spiceAPIQuery("searchForKernelsets", args);
         string kvect = out["body"]["return"];
         return make_pair(kvect, out["body"]["kernels"]);
       }
-      json kernels = Inventory::search_for_kernelsets(spiceqlNames, types, startTime, stopTime, ckQualities, spkQualities, fullKernelPath, limitCk, limitSpk, overwrite);
+      json kernels = Inventory::search_for_kernelsets(spiceqlNames, types, startTime, stopTime, ckQualities, spkQualities, options.fullKernelPath, options.limitCk, options.limitSpk, overwrite, options.priorityPck);
       return {"", kernels};
   }
 }

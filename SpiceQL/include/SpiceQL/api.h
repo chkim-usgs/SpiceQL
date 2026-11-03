@@ -31,11 +31,15 @@ namespace SpiceQL {
         int limitSpk = 1;
         //! additional kernels to load
         std::vector<std::string> kernelList = {};
+        //! how to collapse generic pckNNNNN.tpc kernels
+        //! "mission" prefers the queried mission's copy, "latest" the highest
+        //! version, default "" returns them all
+        std::string priorityPck = "";
     };
 
 #ifndef SWIG
     // defines to_json/from_json for QueryOpts since SWIG cannot parse the macro
-    NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(QueryOpts, useWeb, searchKernels, fullKernelPath, limitCk, limitSpk, kernelList)
+    NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE_WITH_DEFAULT(QueryOpts, useWeb, searchKernels, fullKernelPath, limitCk, limitSpk, kernelList, priorityPck)
 #endif
 
     /**
@@ -1025,21 +1029,18 @@ namespace SpiceQL {
     /**
      * @brief Overload of searchForKernelsets() that takes the common optional parameters as a QueryOpts.
      *
-     * Only useWeb, fullKernelPath, limitCk, limitSpk are used from options.
+     * Only useWeb, fullKernelPath, limitCk, limitSpk, priorityPck are used from options.
      *
      * @param options QueryOpts common optional parameters
      **/
-    template <typename = void>
     std::pair<std::string, nlohmann::json> searchForKernelsets(
             std::vector<std::string> spiceqlNames,
-            std::vector<std::string> types={"ck", "spk", "tspk", "lsk", "mk", "sclk", "iak", "ik", "fk", "dsk", "pck", "ek"},
-            double startTime=-std::numeric_limits<double>::max(),
-            double stopTime=std::numeric_limits<double>::max(),
-            std::vector<std::string> ckQualities={"smithed", "reconstructed"},
-            std::vector<std::string> spkQualities={"smithed", "reconstructed"},
-            QueryOpts options={},
-            bool overwrite=false) {
-        return searchForKernelsets(spiceqlNames, types, startTime, stopTime, ckQualities, spkQualities, options.useWeb, options.fullKernelPath, options.limitCk, options.limitSpk, overwrite);
-    }
+            std::vector<std::string> types,
+            double startTime,
+            double stopTime,
+            std::vector<std::string> ckQualities,
+            std::vector<std::string> spkQualities,
+            QueryOpts options,
+            bool overwrite=false);
 #endif
 }

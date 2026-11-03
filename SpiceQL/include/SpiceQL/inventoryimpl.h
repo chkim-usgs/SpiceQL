@@ -49,6 +49,20 @@ namespace SpiceQL {
   std::string getCacheDir();
   void setCacheDir(std::string cache_dir, bool override=false);
   std::string getHdfFile();
+
+  /**
+   * @brief Collapse the generic pckNNNNN.tpc kernels in kernels["pck"] based on priority.
+   *
+   * Non-generic pcks (moon_080317.tf, etc.) are left untouched.
+   *
+   * @param kernels kernel search result, modified in place
+   * @param priority_pck "mission" keeps the highest version under any of the missions' directories,
+   *            then under base/, then the highest version overall. "latest" keeps the highest
+   *            version overall. "" is a no-op.
+   * @param missions queried mission names, order doesn't matter. base is ignored here since it is
+   *                 always the fallback.
+   */
+  void collapseGenericPcks(nlohmann::json &kernels, std::string priority_pck, const std::vector<std::string> &missions);
   
   class TimeIndexedKernels { 
     public: 
@@ -96,7 +110,7 @@ namespace SpiceQL {
                                             bool full_kernel_path=false, int limit_ck=-1, int limit_spk=1);
     nlohmann::json search_for_kernelsets(std::vector<std::string> spiceql_names, std::vector<Kernel::Type> types, double start_time=-std::numeric_limits<double>::max(), double stop_time=std::numeric_limits<double>::max(),
                                             std::vector<Kernel::Quality> ckQualities={Kernel::Quality::SMITHED, Kernel::Quality::RECONSTRUCTED}, std::vector<Kernel::Quality> spkQualities={Kernel::Quality::SMITHED, Kernel::Quality::RECONSTRUCTED},
-                                            bool full_kernel_path=false, int limit_ck=-1, int limit_spk=1, bool overwrite=false);
+                                            bool full_kernel_path=false, int limit_ck=-1, int limit_spk=1, bool overwrite=false, std::string priority_pck="");
     nlohmann::json m_json_inventory;
 
     std::map<std::string, std::vector<std::string>> m_nontimedep_kerns;

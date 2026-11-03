@@ -690,6 +690,32 @@ class OverwriteParam():
         self.value = overwrite
 
 
+class PriorityPckParam():
+    @validate_params
+    def __init__(
+            self,
+            priorityPck: Annotated[str, Query(
+                description="How to collapse generic pckNNNNN.tpc kernels to one. "
+                            "\"mission\" prefers the queried mission's copy then base's, "
+                            "\"latest\" takes the highest version, empty returns them all.",
+                openapi_examples={
+                    "default": {
+                        "summary": "Default",
+                        "value": ""
+                    },
+                    "mission": {
+                        "summary": "Prefer the mission's PCKs",
+                        "value": "mission"
+                    },
+                    "latest": {
+                        "summary": "Prefer the latest PCKs",
+                        "value": "latest"
+                    }
+                }
+            )] = ""):
+        self.value = priorityPck
+
+
 class PrecisionParam():
     @validate_params
     def __init__(

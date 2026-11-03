@@ -192,6 +192,78 @@ namespace SpiceQL {
     }
   }
 
+  void collapseGenericPcks(json &kernels, string priority_pck, const vector<string> &missions) {
+    priority_pck = toLower(priority_pck);
+    if (priority_pck.empty()) return;
+    if (priority_pck != "mission" && priority_pck != "latest") {
+      throw invalid_argument("Invalid priorityPck option \"" + priority_pck + "\", must be \"mission\", \"latest\" or empty.");
+    }
+    bool preferLatest = (priority_pck == "latest");
+
+    if (!kernels.contains("pck") || !kernels["pck"].is_array()) return;
+
+    static const std::regex genericRegex("^pck[0-9]+\\.tpc$",
+                                     std::regex::icase | std::regex::optimize);
+
+    vector<string> specificPcks;
+    vector<string> genericPcks;
+    for (auto &kernel : kernels["pck"]) {
+      string path = kernel.get<string>();
+      string basePath = fs::path(path).filename().string();
+      if (std::regex_match(basePath, genericRegex)) genericPcks.push_back(path);
+      else specificPcks.push_back(path);
+    }
+
+    // Do not collapse if only 0 or 1 generic pck
+    if (genericPcks.size() <= 1) return;
+
+    auto hasComponent = [](const string &path, const string &mission) {
+      for (const auto &part : fs::path(path)) {
+        if (toLower(part.string()) == mission) return true;
+      }
+      return false;
+    };
+
+    auto highestVersion = [](const vector<string> &pcks) {
+      string highest;
+      for (const auto &g : pcks) {
+        if (highest.empty() || fs::path(g).filename().string() > fs::path(highest).filename().string()) {
+          highest = g;
+        }
+      }
+      return highest;
+    };
+
+    string chosen;
+    if (!preferLatest) {
+      
+      vector<string> missionPcks;
+      vector<string> basePcks;
+      for (const auto &g : genericPcks) {
+        if (hasComponent(g, "base")) {
+          basePcks.push_back(g);
+          continue;
+        }
+        for (const auto &m : missions) {
+          string ml = toLower(m);
+          if (ml != "base" && hasComponent(g, ml)) {
+            missionPcks.push_back(g);
+            break;
+          }
+        }
+      }
+      // 1) the latest version under the given missions
+      chosen = highestVersion(missionPcks);
+      // 2) the latest version under base/
+      if (chosen.empty()) chosen = highestVersion(basePcks);
+    }
+    // 3) the latest version
+    if (chosen.empty()) chosen = highestVersion(genericPcks);
+
+    specificPcks.push_back(chosen);
+    kernels["pck"] = specificPcks;
+  }
+
 
   // Coverage of one kernel, or the reason it couldn't be read.
   struct CoverageResult {
@@ -828,7 +900,7 @@ namespace SpiceQL {
 
   json InventoryImpl::search_for_kernelsets(vector<string> spiceql_names, vector<Kernel::Type> types, double start_time, double stop_time,
                                   vector<Kernel::Quality> ckQualities, vector<Kernel::Quality> spkQualities, bool full_kernel_path, 
-                                  int limit_ck, int limit_spk, bool overwrite) { 
+                                  int limit_ck, int limit_spk, bool overwrite, string priority_pck) { 
       json kernels;
       // simply iterate over the names
       for(auto &name : spiceql_names) { 
@@ -839,6 +911,7 @@ namespace SpiceQL {
         SPDLOG_TRACE("Overwrite? {}", overwrite);
         merge_json(kernels, subKernels, overwrite);
       }
+      collapseGenericPcks(kernels, priority_pck, spiceql_names);
       return kernels;
   }
 
