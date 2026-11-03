@@ -182,6 +182,16 @@ namespace SpiceQL {
        */
       Config(nlohmann::json json, std::string pointer);
 
+      /**
+       * @brief Construct a new Config object from a json object, carrying over
+       *        the unresolved deps of the config it was taken from
+       *
+       * @param json json object representing a target config
+       * @param pointer pointer to the sub conf
+       * @param deps deps lists recorded before dependency resolution
+       */
+      Config(nlohmann::json json, std::string pointer, nlohmann::json deps);
+
 
       /**
        * @brief Expands the regexes to paths of a config object 
@@ -195,6 +205,13 @@ namespace SpiceQL {
 
       //! pointer to the sub conf that the user is interacting with
       std::string confPointer;
+
+      //! copy of every "deps" value from the json files, at the same pointers
+      //! (e.g. {"cassis": {"deps": ["/tgo"]}}), saved before
+      //! resolveConfigDependencies erases them from config. getParentPointer
+      //! uses it so an entry without its own data directory searches its
+      //! dep's directory. Passed on to every sub Config this one creates.
+      nlohmann::json deps;
   };
 
 }

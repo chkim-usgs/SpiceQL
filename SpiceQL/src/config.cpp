@@ -21,6 +21,30 @@ namespace SpiceQL {
   }
 
 
+  // Returns a copy of every "deps" value in config, at the same json pointer it
+  // has in config, e.g. {"cassis": {"deps": ["/tgo"]}}. Must be called before
+  // resolveConfigDependencies, which merges each dep's content into the entry
+  // and then erases its "deps" key.
+  //
+  // getParentPointer uses this copy, through getRootDependency, to find which
+  // data directory an entry's kernels live in. An entry with no directory of
+  // its own (cassis -> /tgo, ctx -> /mro) is redirected to its dep's
+  // directory, following chains like lroc -> /moc -> /lro.
+  //
+  // With the deps erased, that redirect never happens. The entry's kernel
+  // regexes are then matched across the whole data area. Names only one
+  // mission has still land in the right place, but a shared name like
+  // pck[0-9]{5}.tpc matches a copy in any mission (cassis picked up
+  // newhorizons/kernels/pck/pck00011.tpc instead of tgo's).
+  static json collectDeps(json &config) {
+    json deps;
+    for (auto &ptr : findKeyInJson(config, "deps", true)) {
+      deps[ptr] = config[ptr];
+    }
+    return deps;
+  }
+
+
   Config::Config() {
     string dbPath = getConfigDirectory(); 
     vector<string> json_paths = glob(dbPath, ".json");
@@ -33,6 +57,7 @@ namespace SpiceQL {
         config[it.key()] = it.value();
       }
     }
+    deps = collectDeps(config);
     resolveConfigDependencies(config, config);
   }
 
@@ -40,6 +65,7 @@ namespace SpiceQL {
   Config::Config(string j) {
     std::ifstream ifs(j);
     config = json::parse(ifs);
+    deps = collectDeps(config);
     resolveConfigDependencies(config, config);
   }
 
@@ -47,6 +73,15 @@ namespace SpiceQL {
   Config::Config(json j, string pointer) {
     config = j;
     confPointer = pointer;
+    deps = collectDeps(config);
+    resolveConfigDependencies(config, config);
+  }
+
+
+  Config::Config(json j, string pointer, json d) {
+    config = j;
+    confPointer = pointer;
+    deps = d;
     resolveConfigDependencies(config, config);
   }
 
@@ -60,7 +95,7 @@ namespace SpiceQL {
     json::json_pointer pbase(confPointer);
     pointer = (pbase / p).to_string();
     
-    Config conf(config, pointer);
+    Config conf(config, pointer, deps);
     return conf;
   }
 
@@ -72,7 +107,7 @@ namespace SpiceQL {
       eval_json[pointer] = j;
     }
 
-    return Config(eval_json, "");
+    return Config(eval_json, "", deps);
   }
 
   string Config::getParentPointer(string searchPointer, int pointerPosition) {
@@ -101,7 +136,7 @@ namespace SpiceQL {
     json::json_pointer fullPointer = pathMod;
 
   // If there is some dependency at the pointer requested, return that instead
-    string depPath = getRootDependency(config, fullPointer.to_string());
+    string depPath = getRootDependency(deps, fullPointer.to_string());
     if (depPath != "") {
       return depPath;
     }
