@@ -20,22 +20,6 @@ namespace SpiceQL {
     return Inventory::getFrameList();
   }
 
-
-  // Returns a copy of every "deps" value in config, at the same json pointer it
-  // has in config, e.g. {"cassis": {"deps": ["/tgo"]}}. Must be called before
-  // resolveConfigDependencies, which merges each dep's content into the entry
-  // and then erases its "deps" key.
-  //
-  // getParentPointer uses this copy, through getRootDependency, to find which
-  // data directory an entry's kernels live in. An entry with no directory of
-  // its own (cassis -> /tgo, ctx -> /mro) is redirected to its dep's
-  // directory, following chains like lroc -> /moc -> /lro.
-  //
-  // With the deps erased, that redirect never happens. The entry's kernel
-  // regexes are then matched across the whole data area. Names only one
-  // mission has still land in the right place, but a shared name like
-  // pck[0-9]{5}.tpc matches a copy in any mission (cassis picked up
-  // newhorizons/kernels/pck/pck00011.tpc instead of tgo's).
   static json collectDeps(json &config) {
     json deps;
     for (auto &ptr : findKeyInJson(config, "deps", true)) {
